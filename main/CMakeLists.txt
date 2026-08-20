@@ -7,6 +7,11 @@ endif()
 idf_component_register(
 	SRCS
 		"main.c"
+		"emulator/em_cpu.c"
+		"emulator/em_insn.c"
+		"emulator/em_machine.c"
+		"emulator/em_test_cases.c"
+		"emulator/em_test.c"
 	PRIV_REQUIRES
 		esp_lcd
 		fatfs
@@ -17,6 +22,7 @@ idf_component_register(
 		${extra_requires}
 	INCLUDE_DIRS
 		"."
+		"emulator"
 )
 
 idf_build_set_property(COMPILE_OPTIONS "-Wno-error=unused-variable" APPEND)

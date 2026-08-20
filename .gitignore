@@ -4,7 +4,7 @@ main/kbelf_lib.c
 sdkconfig.old
 *.bak
 *.old
-tools/__pycache__
+__pycache__
 .cache
 esp-idf
 esp-idf-tools
@@ -22,3 +22,4 @@ components/badgeteam__badgelink/
 .vscode
 badgelink
 eim_config.toml
+main/emulator/86jit-test

@@ -5,6 +5,7 @@
 #include "bsp/power.h"
 #include "custom_certificates.h"
 #include "driver/gpio.h"
+#include "em_test.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_types.h"
 #include "esp_log.h"
@@ -135,6 +136,7 @@ void app_main(void) {
     // Get input event queue from BSP
     ESP_ERROR_CHECK(bsp_input_get_queue(&input_event_queue));
 
+    em_run_tests();
     display_message("Welcome! Press any key to trigger an event.");
 
     while (1) {
