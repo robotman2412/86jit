@@ -1,6 +1,11 @@
 CompileFlags:
+  Add:
+    - -march=rv32imafc_zicsr_zifencei_zaamo_zalrsc
   Remove:
     - -fno-shrink-wrap
     - -fstrict-volatile-bitfields
     - -fno-tree-switch-conversion
-    - -march=rv32imafc_zicsr_zifencei_xesppie
+    - -march=rv32imafc_zicsr_zifencei_zaamo_zalrsc_xesploop_xespv2p1
+    - -fno-malloc-dce
+    - -fzero-init-padding-bits=all
+    - -mtune=esp-base
