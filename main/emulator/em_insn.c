@@ -149,7 +149,7 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         bytes++;                                                     // MODRM byte.
         insn.iop  = EM_IOP_MOV;
         bytes     = em_insn_decode_modrm(&insn, EM_OPCODE_D_BIT(opcode), true, modrm, bytes);
-        insn.reg1 = EM_REGNO_SEG(insn.reg1);
+        insn.reg1 = EM_REGNO_SEG(EM_MODRM_REG(modrm));
 
 #pragma endregion MOV
 #pragma region PUSH
@@ -368,8 +368,6 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         bytes++;                                                         // MODRM byte.
         insn.iop = EM_IOP_NEG;
         bytes    = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, EM_OPCODE_W_BIT(opcode), modrm, bytes);
-        insn.rhs = EM_AMODE_IMM;
-        insn.imm = 1;
 
 #pragma endregion NEG
 #pragma region CMP
@@ -530,8 +528,9 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
 #pragma region RCL
     } else if ((opcode & 0xfc) == 0xd0 && EM_MODRM_OPCODE(modrm) == 2) { // Register/memory.
         bytes++;                                                         // MODRM byte.
-        insn.iop = EM_IOP_ROL;
-        bytes    = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, EM_OPCODE_W_BIT(opcode), modrm, bytes);
+        insn.iop      = EM_IOP_ROL;
+        insn.op_carry = true;
+        bytes         = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, EM_OPCODE_W_BIT(opcode), modrm, bytes);
         if (EM_OPCODE_V_BIT(opcode)) {
             insn.rhs  = EM_AMODE_REG1;
             insn.reg1 = EM_REGNO_CL;
@@ -544,8 +543,9 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
 #pragma region RCR
     } else if ((opcode & 0xfc) == 0xd0 && EM_MODRM_OPCODE(modrm) == 3) { // Register/memory.
         bytes++;                                                         // MODRM byte.
-        insn.iop = EM_IOP_ROL;
-        bytes    = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, EM_OPCODE_W_BIT(opcode), modrm, bytes);
+        insn.iop      = EM_IOP_ROR;
+        insn.op_carry = true;
+        bytes         = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, EM_OPCODE_W_BIT(opcode), modrm, bytes);
         if (EM_OPCODE_V_BIT(opcode)) {
             insn.rhs  = EM_AMODE_REG1;
             insn.reg1 = EM_REGNO_CL;
@@ -577,7 +577,7 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
 
 #pragma endregion AND
 #pragma region TEST
-    } else if ((opcode & 0xfc) == 0x10) { // Register/memory, register.
+    } else if ((opcode & 0xfc) == 0x84) { // Register/memory, register.
         bytes++;                          // MODRM byte.
         insn.iop = EM_IOP_TEST;
         bytes    = em_insn_decode_modrm(&insn, EM_OPCODE_D_BIT(opcode), EM_OPCODE_W_BIT(opcode), modrm, bytes);

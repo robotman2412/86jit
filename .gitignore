@@ -22,4 +22,5 @@ components/badgeteam__badgelink/
 .vscode
 badgelink
 eim_config.toml
+main/emulator/test/em_test_cases.c
 main/emulator/86jit-test

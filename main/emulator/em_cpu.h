@@ -20,10 +20,10 @@ typedef enum __attribute__((packed)) {
     EM_REGNO_SI,
     EM_REGNO_DI,
     /* Segment selectors */
-    EM_REGNO_CS,
-    EM_REGNO_DS,
-    EM_REGNO_SS,
     EM_REGNO_ES,
+    EM_REGNO_CS,
+    EM_REGNO_SS,
+    EM_REGNO_DS,
     /* Other */
     EM_REGNO_IP,
     EM_REGNO_FLAGS,
@@ -38,7 +38,7 @@ typedef enum __attribute__((packed)) {
     EM_REGNO_BH,
 } em_regno_t;
 
-#define EM_REGNO_SEG(x) ((em_regno_t)((x) + EM_REGNO_CS))
+#define EM_REGNO_SEG(x) ((em_regno_t)((x) + EM_REGNO_ES))
 
 #define EM_REGNO8(x)     ((em_regno_t)((x) | 0x80))
 #define EM_REGNO16(x)    ((em_regno_t)(x))
@@ -62,7 +62,7 @@ union em_cpu_regs {
         // Pointers and index group.
         uint16_t sp, bp, si, di;
         // Segment selectors.
-        uint16_t cs, ds, ss, es;
+        uint16_t es, cs, ss, ds;
         // Instruction pointer.
         uint16_t ip;
         // Flags register.
