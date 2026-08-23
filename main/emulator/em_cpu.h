@@ -38,6 +38,10 @@ typedef enum __attribute__((packed)) {
     EM_REGNO_BH,
 } em_regno_t;
 
+#define EM_REGNO16_COUNT 14
+
+char const *em_regno_name(em_regno_t regno) __attribute__((const));
+
 #define EM_REGNO_SEG(x) ((em_regno_t)((x) + EM_REGNO_ES))
 
 #define EM_REGNO8(x)     ((em_regno_t)((x) | 0x80))
@@ -71,7 +75,7 @@ union em_cpu_regs {
     // View of 8-bit registers.
     uint8_t  reg8[8];
     // View of 16-bit registers.
-    uint16_t reg16[12];
+    uint16_t reg16[14];
 };
 
 // Flags register: Auxiliary carry flag.

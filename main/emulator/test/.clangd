@@ -1,0 +1,8 @@
+CompileFlags:
+    Remove:
+        - "-*"
+    Add:
+        - "--target=x86_64-pc-linux-gnu"
+        - "-std=c17"
+        - "-I/home/julian/the_projects/86jit/main/emulator"
+        - "-I/home/julian/the_projects/86jit/main/emulator/test"
