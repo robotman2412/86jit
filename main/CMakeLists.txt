@@ -10,8 +10,6 @@ idf_component_register(
 		"emulator/em_cpu.c"
 		"emulator/em_insn.c"
 		"emulator/em_machine.c"
-		"emulator/em_test_cases.c"
-		"emulator/em_test.c"
 	PRIV_REQUIRES
 		esp_lcd
 		fatfs

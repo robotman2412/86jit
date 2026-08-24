@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "em_cpu.h"
 #include "em_insn.h"
 
 #include <stddef.h>
@@ -19,7 +18,6 @@ typedef struct {
 
 typedef struct {
     char const    *name;
-    em_cpu_regs_t  regs;
     uint8_t const *code;
     size_t         code_len;
 } em_parity_test_t;

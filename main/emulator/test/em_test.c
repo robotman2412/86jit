@@ -4,8 +4,6 @@
 
 #define _DEFAULT_SOURCE
 
-#include "em_test.h"
-
 #include "em_cpu.h"
 #include "em_insn.h"
 #include "em_machine.h"
@@ -42,6 +40,8 @@ static bool decode_test(em_decode_test_t const *test) {
         printf("    iop:      %-3d     %-3d\n", test->decd.iop, insn.iop);
         printf("    op_carry: %-3d     %-3d\n", test->decd.op_carry, insn.op_carry);
         printf("    op_sign:  %-3d     %-3d\n", test->decd.op_sign, insn.op_sign);
+        printf("    op_wide:  %-3d     %-3d\n", test->decd.op_wide, insn.op_wide);
+        printf("    op_no_cf: %-3d     %-3d\n", test->decd.op_no_cf, insn.op_no_cf);
         printf("    reg1:     0x%02x    0x%02x\n", test->decd.reg1, insn.reg1);
         printf("    reg2:     0x%02x    0x%02x\n", test->decd.reg2, insn.reg2);
         printf("    reg3:     0x%02x    0x%02x\n", test->decd.reg3, insn.reg3);
@@ -238,6 +238,12 @@ static bool parity_test(em_parity_test_t const *test) {
 
     close(cpufd);
     close(vmfd);
+
+    if (!fail) {
+        printf("\033[32mOK\033[0m\n");
+    }
+
+    return fail;
 }
 
 int main(int argc, char **argv) {

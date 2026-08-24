@@ -7,7 +7,11 @@
 #include "em_insn.h"
 #include "em_machine.h"
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 
 char const *em_regno_name(em_regno_t regno) {
@@ -66,8 +70,250 @@ static em_insn_t em_cpu_fetch(em_machine_t *mach) {
     return insn;
 }
 
+// Read a CPU register.
+uint16_t em_cpu_read_reg(em_cpu_t const *cpu, em_regno_t regno, bool sign) {
+    if (regno & 0x80) {
+        uint8_t tmp = cpu->regs.reg8[regno & 0x7f];
+        return sign ? (int8_t)tmp : tmp;
+    } else {
+        return cpu->regs.reg16[regno & 0x7f];
+    }
+}
+
+// Write a CPU register.
+void em_cpu_write_reg(em_cpu_t *cpu, em_regno_t regno, uint16_t value) {
+    if (regno & 0x80) {
+        cpu->regs.reg8[regno & 0x7f] = value;
+    } else {
+        cpu->regs.reg16[regno & 0x7f] = value;
+    }
+}
+
+static uint16_t read_mem(em_machine_t *mach, uint16_t addr, bool wide, bool sign) {
+    if (wide) {
+        return (mach->ram[addr] << 8) | mach->ram[(addr + 1) % 0x10000];
+    } else if (sign) {
+        return (int8_t)mach->ram[addr];
+    } else {
+        return mach->ram[addr];
+    }
+}
+
+static void write_mem(em_machine_t *mach, uint16_t addr, bool wide, uint16_t value) {
+    mach->ram[addr] = value;
+    if (wide) {
+        mach->ram[(addr + 1) % 0x10000] = value;
+    }
+}
+
+static uint16_t read_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode) {
+    switch (amode) {
+        case EM_AMODE_NONE: return 0;
+        case EM_AMODE_IMM: return insn->imm;
+        case EM_AMODE_REG1: return em_cpu_read_reg(&mach->cpu, insn->reg1, insn->op_sign);
+        case EM_AMODE_REG2: return em_cpu_read_reg(&mach->cpu, insn->reg2, insn->op_sign);
+        case EM_AMODE_ADDR: return read_mem(mach, insn->addr, insn->op_wide, insn->op_sign);
+        case EM_AMODE_PTR2:
+            return read_mem(mach, insn->addr + mach->cpu.regs.reg16[insn->reg2], insn->op_wide, insn->op_sign);
+        case EM_AMODE_PTR23:
+            return read_mem(
+                mach,
+                insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3],
+                insn->op_wide,
+                insn->op_sign
+            );
+    }
+    abort();
+}
+
+static uint16_t lea_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode) {
+    switch (amode) {
+        case EM_AMODE_NONE:
+        case EM_AMODE_IMM:
+        case EM_AMODE_REG1:
+        case EM_AMODE_REG2: abort();
+        case EM_AMODE_ADDR: return insn->addr;
+        case EM_AMODE_PTR2: return mach->cpu.regs.reg16[insn->reg2];
+        case EM_AMODE_PTR23: return insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3];
+    }
+    abort();
+}
+
+static void write_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode, uint16_t value) {
+    switch (amode) {
+        case EM_AMODE_NONE:
+        case EM_AMODE_IMM: abort();
+        case EM_AMODE_REG1: em_cpu_write_reg(&mach->cpu, insn->reg1, value); return;
+        case EM_AMODE_REG2: em_cpu_write_reg(&mach->cpu, insn->reg2, value); return;
+        case EM_AMODE_ADDR: write_mem(mach, insn->addr, insn->op_wide, value); return;
+        case EM_AMODE_PTR2: write_mem(mach, insn->addr + mach->cpu.regs.reg16[insn->reg2], insn->op_wide, value);
+        case EM_AMODE_PTR23:
+            write_mem(
+                mach,
+                insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3],
+                insn->op_wide,
+                value
+            );
+            return;
+    }
+    abort();
+}
+
 // Step the CPU one instruction.
 void em_cpu_step(em_machine_t *mach) {
     uint16_t  old_ip = mach->cpu.regs.ip;
     em_insn_t insn   = em_cpu_fetch(mach);
+
+    // Fetch operands.
+    uint16_t lhs = 0;
+    uint16_t rhs = 0;
+    switch (insn.iop) {
+        case EM_IOP_ILLEGAL:
+        case EM_IOP_NOP: break;
+
+        case EM_IOP_MOV: rhs = read_operand(mach, &insn, insn.rhs); break;
+        case EM_IOP_PUSH: lhs = read_operand(mach, &insn, insn.lhs); break;
+        case EM_IOP_NEG: rhs = read_operand(mach, &insn, insn.lhs); break; // Implemented through sub.
+
+        case EM_IOP_POP:
+        case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
+        case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
+
+        case EM_IOP_XCHG:
+        case EM_IOP_LEA:
+        case EM_IOP_ADD:
+        case EM_IOP_SUB:
+        case EM_IOP_CMP:
+        case EM_IOP_AND:
+        case EM_IOP_OR:
+        case EM_IOP_XOR:
+        case EM_IOP_TEST:
+        case EM_IOP_SHR:
+        case EM_IOP_SHL:
+        case EM_IOP_ROL:
+        case EM_IOP_ROR:
+        case EM_IOP_MUL:
+        case EM_IOP_DIV:
+            lhs = read_operand(mach, &insn, insn.lhs);
+            rhs = read_operand(mach, &insn, insn.rhs);
+            break;
+    }
+
+    // Perform calculation.
+    int const  mask      = insn.op_wide ? 0xffff : 0xff;
+    int const  bits      = insn.op_wide ? 16 : 8;
+    int const  log2_bits = insn.op_wide ? 4 : 3;
+    bool const orig_sign = lhs >> (bits - 1);
+    bool       neg_cf    = false;
+    switch (insn.iop) {
+        case EM_IOP_ILLEGAL: fprintf(stderr, "TODO: EM_IOP_ILLEGAL\n"); abort();
+        case EM_IOP_NOP: break;
+
+        case EM_IOP_MOV: lhs = rhs; break;
+        case EM_IOP_PUSH: break;
+        case EM_IOP_POP: fprintf(stderr, "TODO: EM_IOP_POP\n"); abort();
+        case EM_IOP_XCHG: break; // Handled by the writeback.
+        case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
+        case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
+        case EM_IOP_LEA: lhs = rhs; break;
+
+        case EM_IOP_SUB:
+        case EM_IOP_NEG:
+        case EM_IOP_CMP:
+            neg_cf = true;
+            rhs    = ~rhs + 1;
+            goto additive;
+        case EM_IOP_ADD:
+        additive:
+            lhs = lhs + rhs;
+
+            if (!insn.op_no_cf) {
+                mach->cpu.regs.flags &= ~EM_FLAG_CF;
+                mach->cpu.regs.flags |= EM_FLAG_SF * (neg_cf ^ ((int16_t)lhs + (int16_t)rhs < 0));
+            }
+            mach->cpu.regs.flags &= ~(EM_FLAG_AF | EM_FLAG_OF);
+            mach->cpu.regs.flags |= EM_FLAG_AF * (neg_cf ^ ((lhs & 0xf) + (rhs & 0xf) >= 0x10));
+            goto arith_flags;
+
+        case EM_IOP_AND:
+        case EM_IOP_TEST: lhs = lhs & rhs; goto bitmanip_flags;
+        case EM_IOP_OR: lhs = lhs | rhs; goto bitmanip_flags;
+        case EM_IOP_XOR: lhs = lhs ^ rhs; goto bitmanip_flags;
+        case EM_IOP_SHR:
+            rhs %= log2_bits;
+            lhs  = insn.op_sign ? (int16_t)lhs >> rhs : lhs >> rhs;
+            goto bitmanip_flags;
+        case EM_IOP_SHL:
+            rhs %= log2_bits;
+            lhs  = lhs << rhs;
+            goto bitmanip_flags;
+        case EM_IOP_ROL:
+            rhs %= log2_bits;
+            lhs  = (lhs << rhs) | (lhs >> (bits - rhs));
+            goto bitmanip_flags;
+        case EM_IOP_ROR:
+            rhs %= log2_bits;
+            lhs  = (lhs >> rhs) | (lhs << (bits - rhs));
+            goto bitmanip_flags;
+        case EM_IOP_MUL: lhs = insn.op_sign ? (int16_t)lhs * (int16_t)rhs : lhs * rhs; goto arith_flags;
+        case EM_IOP_DIV:
+            if (rhs == 0) {
+                fprintf(stderr, "TODO: Division by 0 exception\n");
+                abort();
+            }
+            lhs = insn.op_sign ? (int16_t)lhs / (int16_t)rhs : lhs / rhs;
+            goto arith_flags;
+
+        bitmanip_flags:
+            mach->cpu.regs.flags &= ~(EM_FLAG_OF | EM_FLAG_CF | EM_FLAG_AF);
+            goto common_flags;
+        arith_flags: {
+            bool sign             = lhs >> (bits - 1);
+            mach->cpu.regs.flags &= ~EM_FLAG_OF;
+            mach->cpu.regs.flags |= EM_FLAG_OF * (sign != orig_sign);
+            goto common_flags;
+        }
+        common_flags: {
+            bool sign             = lhs >> (bits - 1);
+            mach->cpu.regs.flags &= ~(EM_FLAG_SF | EM_FLAG_ZF | EM_FLAG_PF | EM_FLAG_OF);
+            mach->cpu.regs.flags |= EM_FLAG_SF * sign;
+            mach->cpu.regs.flags |= EM_FLAG_ZF * ((lhs & mask) == 0);
+            if (__builtin_popcount(lhs & 0xff) % 2 == 0) {
+                mach->cpu.regs.flags |= EM_FLAG_PF;
+            }
+        } break;
+    }
+
+    // Write back operands.
+    switch (insn.iop) {
+        case EM_IOP_ILLEGAL:
+        case EM_IOP_NOP:
+        case EM_IOP_PUSH:
+        case EM_IOP_TEST:
+        case EM_IOP_CMP: break;
+
+        case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
+        case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
+
+        case EM_IOP_XCHG:
+            write_operand(mach, &insn, insn.lhs, rhs);
+            write_operand(mach, &insn, insn.rhs, lhs);
+            break;
+
+        case EM_IOP_MOV:
+        case EM_IOP_POP:
+        case EM_IOP_LEA:
+        case EM_IOP_ADD:
+        case EM_IOP_SUB:
+        case EM_IOP_NEG:
+        case EM_IOP_AND:
+        case EM_IOP_OR:
+        case EM_IOP_XOR:
+        case EM_IOP_SHR:
+        case EM_IOP_SHL:
+        case EM_IOP_ROL:
+        case EM_IOP_ROR:
+        case EM_IOP_MUL:
+        case EM_IOP_DIV: write_operand(mach, &insn, insn.lhs, lhs); break;
+    }
 }

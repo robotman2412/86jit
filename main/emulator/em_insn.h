@@ -97,6 +97,10 @@ struct em_insn {
     uint8_t  op_carry : 1;
     // Perform signed operation.
     uint8_t  op_sign  : 1;
+    // Operation is 16-bit.
+    uint8_t  op_wide  : 1;
+    // Do not write CF (used by `INC` and `DEC`).
+    uint8_t  op_no_cf : 1;
 
     // Register indices.
     em_regno_t reg1, reg2, reg3;

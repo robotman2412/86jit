@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 
@@ -29,12 +30,12 @@ typedef enum __attribute__((packed)) {
     EM_REGNO_FLAGS,
     /* GPRs with W = 0 */
     EM_REGNO_AL = 0x80,
-    EM_REGNO_CL,
-    EM_REGNO_DL,
-    EM_REGNO_BL,
     EM_REGNO_AH,
+    EM_REGNO_CL,
     EM_REGNO_CH,
+    EM_REGNO_DL,
     EM_REGNO_DH,
+    EM_REGNO_BL,
     EM_REGNO_BH,
 } em_regno_t;
 
@@ -44,9 +45,17 @@ char const *em_regno_name(em_regno_t regno) __attribute__((const));
 
 #define EM_REGNO_SEG(x) ((em_regno_t)((x) + EM_REGNO_ES))
 
-#define EM_REGNO8(x)     ((em_regno_t)((x) | 0x80))
-#define EM_REGNO16(x)    ((em_regno_t)(x))
-#define EM_REGNO_W(x, w) ((em_regno_t)((x) | ((w) ? 0 : 0x80)))
+__attribute__((const)) static inline em_regno_t em_regno8(int bits) {
+    return ((bits << 1) & 6) | (bits >> 2) | 0x80;
+}
+
+__attribute__((const)) static inline em_regno_t em_regno16(int bits) {
+    return bits;
+}
+
+__attribute__((const)) static inline em_regno_t em_regno_w(int bits, bool wide) {
+    return wide ? em_regno16(bits) : em_regno8(bits);
+}
 
 
 
@@ -108,9 +117,9 @@ struct em_cpu {
 em_cpu_t em_cpu_create(void);
 
 // Read a CPU register.
-uint16_t em_cpu_reg_read(em_cpu_regs_t const *regs, em_regno_t regno);
+uint16_t em_cpu_read_reg(em_cpu_t const *cpu, em_regno_t regno, bool sign);
 // Write a CPU register.
-void     em_cpu_reg_write(em_cpu_regs_t const *regs, em_regno_t regno, uint16_t val);
+void     em_cpu_write_reg(em_cpu_t *cpu, em_regno_t regno, uint16_t value);
 
 // Reset the CPU state.
 void em_cpu_reset(em_cpu_t *cpu);
