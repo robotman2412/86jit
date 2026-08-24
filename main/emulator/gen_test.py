@@ -222,6 +222,14 @@ parity_tests = [
         shl  bx, cl
         sar  bx, cl
     """),
+    PT("rotate with carry", """
+        mov  ax, 0x09
+        mov  cl, 9
+        rcr  ax, 1
+        rcl  ax, 1
+        rcr  ax, cl
+        rcl  ax, cl
+    """)
 ]
 
 fd = open("test/em_test_cases.c", "w")
