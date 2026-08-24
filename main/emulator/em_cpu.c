@@ -161,8 +161,7 @@ static void write_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t 
 
 // Step the CPU one instruction.
 void em_cpu_step(em_machine_t *mach) {
-    uint16_t  old_ip = mach->cpu.regs.ip;
-    em_insn_t insn   = em_cpu_fetch(mach);
+    em_insn_t insn = em_cpu_fetch(mach);
 
     // Fetch operands.
     uint16_t lhs = 0;
@@ -200,85 +199,115 @@ void em_cpu_step(em_machine_t *mach) {
     }
 
     // Perform calculation.
-    int const  mask      = insn.op_wide ? 0xffff : 0xff;
-    int const  bits      = insn.op_wide ? 16 : 8;
-    int const  log2_bits = insn.op_wide ? 4 : 3;
-    bool const orig_sign = lhs >> (bits - 1);
-    bool       neg_cf    = false;
+    int const mask   = insn.op_wide ? 0xffff : 0xff;
+    int const bits   = insn.op_wide ? 16 : 8;
+    bool      is_sub = false;
+    bool      cin    = insn.op_carry && (mach->cpu.regs.flags & EM_FLAG_CF);
+    int       res    = lhs;
     switch (insn.iop) {
         case EM_IOP_ILLEGAL: fprintf(stderr, "TODO: EM_IOP_ILLEGAL\n"); abort();
         case EM_IOP_NOP: break;
 
-        case EM_IOP_MOV: lhs = rhs; break;
+        case EM_IOP_MOV: res = rhs; break;
         case EM_IOP_PUSH: break;
         case EM_IOP_POP: fprintf(stderr, "TODO: EM_IOP_POP\n"); abort();
         case EM_IOP_XCHG: break; // Handled by the writeback.
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
         case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
-        case EM_IOP_LEA: lhs = rhs; break;
+        case EM_IOP_LEA: res = rhs; break;
 
         case EM_IOP_SUB:
         case EM_IOP_NEG:
         case EM_IOP_CMP:
-            neg_cf = true;
-            rhs    = ~rhs + 1;
+            is_sub  = true;
+            rhs     = ~rhs & mask;
+            cin    ^= 1;
             goto additive;
         case EM_IOP_ADD:
         additive:
-            lhs = lhs + rhs;
-
+            res = lhs + rhs + cin;
             if (!insn.op_no_cf) {
                 mach->cpu.regs.flags &= ~EM_FLAG_CF;
-                mach->cpu.regs.flags |= EM_FLAG_SF * (neg_cf ^ ((int16_t)lhs + (int16_t)rhs < 0));
+                bool cout             = (res >> bits) & 1;
+                mach->cpu.regs.flags |= EM_FLAG_CF * (is_sub ^ cout);
             }
-            mach->cpu.regs.flags &= ~(EM_FLAG_AF | EM_FLAG_OF);
-            mach->cpu.regs.flags |= EM_FLAG_AF * (neg_cf ^ ((lhs & 0xf) + (rhs & 0xf) >= 0x10));
+            {
+                mach->cpu.regs.flags &= ~EM_FLAG_AF;
+                bool cout             = ((lhs & 0xf) + (rhs & 0xf) + cin) & 0x10;
+                mach->cpu.regs.flags |= EM_FLAG_AF * (is_sub ^ cout);
+            }
             goto arith_flags;
 
         case EM_IOP_AND:
-        case EM_IOP_TEST: lhs = lhs & rhs; goto bitmanip_flags;
-        case EM_IOP_OR: lhs = lhs | rhs; goto bitmanip_flags;
-        case EM_IOP_XOR: lhs = lhs ^ rhs; goto bitmanip_flags;
+        case EM_IOP_TEST: res = lhs & rhs; goto bitmanip_flags;
+        case EM_IOP_OR: res = lhs | rhs; goto bitmanip_flags;
+        case EM_IOP_XOR: res = lhs ^ rhs; goto bitmanip_flags;
+
         case EM_IOP_SHR:
-            rhs %= log2_bits;
-            lhs  = insn.op_sign ? (int16_t)lhs >> rhs : lhs >> rhs;
-            goto bitmanip_flags;
+            rhs                  %= bits;
+            lhs                  &= mask;
+            res                   = insn.op_sign ? (int16_t)lhs >> rhs : lhs >> rhs;
+            mach->cpu.regs.flags &= ~EM_FLAG_CF;
+            mach->cpu.regs.flags |= EM_FLAG_CF * (lhs & 1);
+            goto shift_flags;
         case EM_IOP_SHL:
-            rhs %= log2_bits;
-            lhs  = lhs << rhs;
-            goto bitmanip_flags;
+            rhs                  %= bits;
+            lhs                  &= mask;
+            res                   = lhs << rhs;
+            mach->cpu.regs.flags &= ~EM_FLAG_CF;
+            mach->cpu.regs.flags |= EM_FLAG_CF * (lhs >> (bits - 1));
+            goto shift_flags;
         case EM_IOP_ROL:
-            rhs %= log2_bits;
-            lhs  = (lhs << rhs) | (lhs >> (bits - rhs));
-            goto bitmanip_flags;
+            rhs                  %= bits;
+            lhs                  &= mask;
+            res                   = (lhs << rhs) | (lhs >> ((bits - rhs) % bits));
+            mach->cpu.regs.flags &= ~EM_FLAG_CF;
+            mach->cpu.regs.flags |= EM_FLAG_CF * (lhs >> (bits - 1));
+            goto shift_flags;
         case EM_IOP_ROR:
-            rhs %= log2_bits;
-            lhs  = (lhs >> rhs) | (lhs << (bits - rhs));
-            goto bitmanip_flags;
-        case EM_IOP_MUL: lhs = insn.op_sign ? (int16_t)lhs * (int16_t)rhs : lhs * rhs; goto arith_flags;
+            rhs                  %= bits;
+            lhs                  &= mask;
+            res                   = (lhs >> rhs) | (lhs << ((bits - rhs) % bits));
+            mach->cpu.regs.flags &= ~EM_FLAG_CF;
+            mach->cpu.regs.flags |= EM_FLAG_CF * (lhs & 1);
+            goto shift_flags;
+        shift_flags: {
+            mach->cpu.regs.flags &= ~EM_FLAG_OF;
+            bool old_sign         = (lhs >> (mask - 1)) & 1;
+            bool new_sign         = (res >> (mask - 1)) & 1;
+            mach->cpu.regs.flags |= EM_FLAG_OF * (old_sign != new_sign);
+        } break;
+
+        case EM_IOP_MUL: res = insn.op_sign ? (int16_t)lhs * (int16_t)rhs : lhs * rhs; goto common_flags;
         case EM_IOP_DIV:
             if (rhs == 0) {
                 fprintf(stderr, "TODO: Division by 0 exception\n");
                 abort();
             }
-            lhs = insn.op_sign ? (int16_t)lhs / (int16_t)rhs : lhs / rhs;
-            goto arith_flags;
+            res = insn.op_sign ? (int16_t)lhs / (int16_t)rhs : lhs / rhs;
+            goto common_flags;
 
         bitmanip_flags:
             mach->cpu.regs.flags &= ~(EM_FLAG_OF | EM_FLAG_CF | EM_FLAG_AF);
             goto common_flags;
         arith_flags: {
-            bool sign             = lhs >> (bits - 1);
+            bool lhs_sign         = (lhs >> (bits - 1)) & 1;
+            bool rhs_sign         = (rhs >> (bits - 1)) & 1;
+            bool res_sign         = (res >> (bits - 1)) & 1;
             mach->cpu.regs.flags &= ~EM_FLAG_OF;
-            mach->cpu.regs.flags |= EM_FLAG_OF * (sign != orig_sign);
+            // if (lhs_sign == rhs_sign) {
+            //     mach->cpu.regs.flags |= EM_FLAG_OF * (lhs_sign != res_sign);
+            // }
+            mach->cpu.regs.flags |= EM_FLAG_OF * (lhs_sign == rhs_sign && lhs_sign != res_sign);
+            // mach->cpu.regs.flags |= EM_FLAG_OF * ((int16_t)lhs + (int16_t)rhs != (int16_t)res);
             goto common_flags;
         }
         common_flags: {
-            bool sign             = lhs >> (bits - 1);
-            mach->cpu.regs.flags &= ~(EM_FLAG_SF | EM_FLAG_ZF | EM_FLAG_PF | EM_FLAG_OF);
+            bool sign             = (res >> (bits - 1)) & 1;
+            mach->cpu.regs.flags &= ~(EM_FLAG_SF | EM_FLAG_ZF | EM_FLAG_PF);
             mach->cpu.regs.flags |= EM_FLAG_SF * sign;
-            mach->cpu.regs.flags |= EM_FLAG_ZF * ((lhs & mask) == 0);
-            if (__builtin_popcount(lhs & 0xff) % 2 == 0) {
+            mach->cpu.regs.flags |= EM_FLAG_ZF * ((res & mask) == 0);
+            if (__builtin_popcount(res & 0xff) % 2 == 0) {
                 mach->cpu.regs.flags |= EM_FLAG_PF;
             }
         } break;
@@ -314,6 +343,6 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_ROL:
         case EM_IOP_ROR:
         case EM_IOP_MUL:
-        case EM_IOP_DIV: write_operand(mach, &insn, insn.lhs, lhs); break;
+        case EM_IOP_DIV: write_operand(mach, &insn, insn.lhs, res); break;
     }
 }

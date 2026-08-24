@@ -119,6 +119,7 @@ decode_tests = [
     DT("and  bx, [0x8001]",   decd_insn("and",  "reg1", "addr", ["bx"],       addr=0x8001, op_wide=True)),
     DT("sub  bx, 3",          decd_insn("sub",  "reg2", "imm",  [None, "bx"], imm=3, op_wide=True, op_sign=True)),
     DT("sub  bx, 0xffff",     decd_insn("sub",  "reg2", "imm",  [None, "bx"], imm=0xffff, op_wide=True, op_sign=True)),
+    DT("cmp  ax, 200",        decd_insn("cmp",  "reg1", "imm",  ["ax"],       imm=200, op_wide=True, op_sign=False)),
 
     # Binary arithmetic.
     DT("add  bx, cx",         decd_insn("add",  "reg2", "reg1", ["cx", "bx"], op_wide=True)),
@@ -166,19 +167,61 @@ parity_tests = [
         mov  dx, -9
         add  ax, bx
         sub  bx, 3
-        test cx, dx
         cmp  ax, 12
         cmp  ax, 200
+        sub  ax, 200
+        mov  cx, 0x0001
+        mov  dx, 0x8000
+        sub  dx, cx
+        mov  cx, 0x0000
+        mov  dx, 0x8000
+        sub  dx, cx
+        mov  cx, 0x8000
+        mov  dx, 0x8000
+        sub  dx, cx
+        mov  cx, 0x8001
+        mov  dx, 0x8000
+        sub  dx, cx
+    """),
+    PT("basic bitwise", """
+        mov  ax, 0xcafe
+        mov  bx, 0xbabe
+        and  bl, ah
+        xor  bh, al
+        mov  cx, 0xaa55
+        mov  dx, 0xcccc
+        or   cx, dx
+        mov  ax, 0x8000
+        mov  bx, 0x8001
+        test bx, ax
+        test ax, bx
+        mov  ax, 0x7000
+        mov  bx, 0x8001
+        test bx, ax
+        test ax, bx
+    """),
+    PT("single-bit shift", """
         mov  ax, 0x09
+        mov  bx, -1
+        mov  cl, 1
+        ror  ax, cl
+        rol  ax, cl
+        shl  bx, cl
+        sar  bx, cl
+        shl  bx, cl
+        sar  bx, cl
+    """),
+    PT("multi-bit shift", """
+        mov  ax, 0x09
+        mov  bx, -1
         mov  cl, 4
         ror  ax, cl
         rol  ax, cl
-        mov  ax, -1
-        shl  ax, cl
-        sar  ax, cl
-        shl  ax, cl
-        sar  ax, cl
-    """)
+        shl  bx, cl
+        sar  bx, cl
+        shl  bx, cl
+        sar  bx, cl
+    """),
 ]
 
 fd = open("test/em_test_cases.c", "w")

@@ -425,7 +425,7 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         insn.lhs     = EM_AMODE_REG1;
         insn.reg1    = EM_OPCODE_W_BIT(opcode) ? EM_REGNO_AX : EM_REGNO_AL;
         insn.rhs     = EM_AMODE_IMM;
-        insn.op_sign = true;
+        insn.op_sign = !EM_OPCODE_W_BIT(opcode);
         insn.op_wide = EM_OPCODE_W_BIT(opcode);
         bytes        = em_insn_fetch_imm(&insn, false, bytes);
 

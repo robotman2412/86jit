@@ -183,8 +183,10 @@ static bool parity_test(em_parity_test_t const *test) {
     bool     fail   = false;
     size_t   line   = 0;
     uint16_t old_ip = mach.cpu.regs.ip;
+    uint16_t old_cs = mach.cpu.regs.cs;
     while (mach.cpu.regs.ip < test->code_len && !fail) {
         old_ip = mach.cpu.regs.ip;
+        old_cs = mach.cpu.regs.cs;
         em_cpu_step(&mach);
         if (ioctl(cpufd, KVM_RUN, NULL)) {
             perror("Cannot run vCPU");
@@ -231,6 +233,12 @@ static bool parity_test(em_parity_test_t const *test) {
         }
 
         line++;
+        if (fail) {
+            printf("    DEBUG\n");
+            printf("    cs:ip   0x%04x:0x%04x\n", old_cs, old_ip);
+            printf("    line    %zd\n", line);
+        }
+        fail = false;
     }
 
     if (memcmp(kvm_ram, mach.ram, EM_RAM_SIZE)) {
@@ -250,7 +258,7 @@ static bool parity_test(em_parity_test_t const *test) {
 
     if (fail) {
         printf("    DEBUG\n");
-        printf("    ip      0x%04x\n", old_ip);
+        printf("    cs:ip   0x%04x:0x%04x\n", old_cs, old_ip);
         printf("    line    %zd\n", line);
     } else {
         printf("\033[32mOK\033[0m\n");
