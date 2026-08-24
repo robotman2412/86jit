@@ -37,6 +37,7 @@ static bool decode_test(em_decode_test_t const *test) {
         printf("\n");
         printf("              EXPECT  ACTUAL\n");
         printf("    length:   %-3d     %-3d\n", test->decd.length, insn.length);
+        printf("    seg_pfx:  %-3d     %-3d\n", test->decd.seg_pfx, insn.seg_pfx);
         printf("    iop:      %-3d     %-3d\n", test->decd.iop, insn.iop);
         printf("    op_carry: %-3d     %-3d\n", test->decd.op_carry, insn.op_carry);
         printf("    op_sign:  %-3d     %-3d\n", test->decd.op_sign, insn.op_sign);
@@ -80,7 +81,7 @@ static bool parity_test(em_parity_test_t const *test) {
     size_t const   code_gpma = vm_cs * 16 + vm_ip;
 
 #pragma region KVM setup
-    int const kvm_run_size = ioctl(kvmfd, KVM_GET_VCPU_MMAP_SIZE);
+    int const kvm_run_size = ioctl(kvmfd, KVM_GET_VCPU_MMAP_SIZE, NULL);
     if (kvm_run_size < 0) {
         perror("Cannot determine vCPU mmap() size");
         exit(2);
@@ -233,12 +234,6 @@ static bool parity_test(em_parity_test_t const *test) {
         }
 
         line++;
-        if (fail) {
-            printf("    DEBUG\n");
-            printf("    cs:ip   0x%04x:0x%04x\n", old_cs, old_ip);
-            printf("    line    %zd\n", line);
-        }
-        fail = false;
     }
 
     if (memcmp(kvm_ram, mach.ram, EM_RAM_SIZE)) {

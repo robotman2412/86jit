@@ -69,6 +69,7 @@ def decd_insn(
         op_sign: bool|None = None,
         op_wide: bool|None = None,
         op_no_cf: bool|None = None,
+        seg_pfx: str = "NONE",
     ) -> dict[str, str]:
     res = { "iop": "EM_IOP_" + iop.upper() }
     if lhs != None:
@@ -92,6 +93,7 @@ def decd_insn(
         res["op_wide"] = "true" if op_wide else "false"
     if op_no_cf != None:
         res["op_no_cf"] = "true" if op_no_cf else "false"
+    res["seg_pfx"] = "EM_SEGPFX_" + seg_pfx.upper()
     return res
 
 class DecodeTest:
@@ -109,6 +111,12 @@ decode_tests = [
     DT("mov  al, [3000]",     decd_insn("mov",  "reg1", "addr", ["al"],       addr=3000)),
     DT("mov  ds, [0xabcd]",   decd_insn("mov",  "reg1", "addr", ["ds"],       addr = 0xabcd, op_wide=True)),
     DT("xchg al, cl",         decd_insn("xchg", "reg1", "reg2", ["al", "cl"])),
+
+    # Segment override.
+    DT("ds mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ds", addr=3)),
+    DT("es mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="es", addr=3)),
+    DT("ss mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ss", addr=3)),
+    DT("cs mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="cs", addr=3)),
 
     # MOD R/M permutations.
     DT("and  ax, bx",         decd_insn("and",  "reg2", "reg1", ["bx", "ax"], op_wide=True)),

@@ -99,10 +99,11 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
     uint8_t const        opcode = *(bytes++);
     uint8_t const        modrm  = *bytes;
     em_insn_t            insn   = {
-        .length = 1,
-        .lhs    = EM_AMODE_NONE,
-        .rhs    = EM_AMODE_NONE,
-        .iop    = EM_IOP_ILLEGAL,
+        .length  = 1,
+        .lhs     = EM_AMODE_NONE,
+        .rhs     = EM_AMODE_NONE,
+        .iop     = EM_IOP_ILLEGAL,
+        .seg_pfx = EM_SEGPFX_NONE,
     };
 
     if (opcode == 0x90) {
@@ -420,7 +421,7 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         insn.rhs     = EM_AMODE_IMM;
         bytes        = em_insn_fetch_imm(&insn, EM_OPCODE_W_BIT(opcode), bytes);
 
-    } else if ((opcode & 0xfc) == 0x3c) { // Accumulator, immediate.
+    } else if ((opcode & 0xfe) == 0x3c) { // Accumulator, immediate.
         insn.iop     = EM_IOP_CMP;
         insn.lhs     = EM_AMODE_REG1;
         insn.reg1    = EM_OPCODE_W_BIT(opcode) ? EM_REGNO_AX : EM_REGNO_AL;
