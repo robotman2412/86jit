@@ -180,12 +180,19 @@ static bool parity_test(em_parity_test_t const *test) {
     memcpy(kvm_ram + code_gpma, test->code, test->code_len);
     memcpy(mach.ram + code_gpma, test->code, test->code_len);
 
-    bool fail = false;
+    bool     fail   = false;
+    size_t   line   = 0;
+    uint16_t old_ip = mach.cpu.regs.ip;
     while (mach.cpu.regs.ip < test->code_len && !fail) {
+        old_ip = mach.cpu.regs.ip;
         em_cpu_step(&mach);
         if (ioctl(cpufd, KVM_RUN, NULL)) {
             perror("Cannot run vCPU");
             exit(2);
+        }
+        if (kvm_run->exit_reason != KVM_EXIT_DEBUG) {
+            printf("Unexpected KVM exit: %d\n", (int)kvm_run->exit_reason);
+            exit(3);
         }
 
         if (ioctl(cpufd, KVM_GET_REGS, &regs)) {
@@ -222,6 +229,8 @@ static bool parity_test(em_parity_test_t const *test) {
                 fail = true;
             }
         }
+
+        line++;
     }
 
     if (memcmp(kvm_ram, mach.ram, EM_RAM_SIZE)) {
@@ -239,7 +248,11 @@ static bool parity_test(em_parity_test_t const *test) {
     close(cpufd);
     close(vmfd);
 
-    if (!fail) {
+    if (fail) {
+        printf("    DEBUG\n");
+        printf("    ip      0x%04x\n", old_ip);
+        printf("    line    %zd\n", line);
+    } else {
         printf("\033[32mOK\033[0m\n");
     }
 

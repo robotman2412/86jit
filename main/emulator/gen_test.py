@@ -117,6 +117,8 @@ decode_tests = [
     DT("and  bx, bx",         decd_insn("and",  "reg2", "reg1", ["bx", "bx"], op_wide=True)),
     DT("and  bx, 0x8001",     decd_insn("and",  "reg2", "imm",  [None, "bx"], imm=0x8001, op_wide=True)),
     DT("and  bx, [0x8001]",   decd_insn("and",  "reg1", "addr", ["bx"],       addr=0x8001, op_wide=True)),
+    DT("sub  bx, 3",          decd_insn("sub",  "reg2", "imm",  [None, "bx"], imm=3, op_wide=True, op_sign=True)),
+    DT("sub  bx, 0xffff",     decd_insn("sub",  "reg2", "imm",  [None, "bx"], imm=0xffff, op_wide=True, op_sign=True)),
 
     # Binary arithmetic.
     DT("add  bx, cx",         decd_insn("add",  "reg2", "reg1", ["cx", "bx"], op_wide=True)),

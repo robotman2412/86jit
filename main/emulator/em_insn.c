@@ -80,12 +80,12 @@ static uint8_t const *em_insn_fetch_addr(em_insn_t *insn, uint8_t const *bytes) 
 
 // Decode immediate operand.
 static uint8_t const *em_insn_fetch_imm(em_insn_t *insn, bool wide, uint8_t const *bytes) {
-    if (insn->op_wide) {
-        insn->imm = bytes[0] + (bytes[1] << 8);
-        return bytes + 2;
-    } else if (insn->op_sign) {
+    if (insn->op_sign) {
         insn->imm = (int8_t)bytes[0];
         return bytes + 1;
+    } else if (insn->op_wide) {
+        insn->imm = bytes[0] + (bytes[1] << 8);
+        return bytes + 2;
     } else {
         insn->imm = bytes[0];
         return bytes + 1;
@@ -259,9 +259,10 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         bytes++;                                                         // MODRM byte.
         insn.iop     = EM_IOP_ADD;
         insn.op_wide = EM_OPCODE_W_BIT(opcode);
+        insn.op_sign = EM_OPCODE_S_BIT(opcode);
         bytes        = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, modrm, bytes);
         insn.rhs     = EM_AMODE_IMM;
-        bytes        = em_insn_fetch_imm(&insn, EM_OPCODE_S_BIT(opcode), bytes);
+        bytes        = em_insn_fetch_imm(&insn, EM_OPCODE_W_BIT(opcode), bytes);
 
     } else if ((opcode & 0xfc) == 0x04) { // Accumulator, immediate.
         insn.iop     = EM_IOP_ADD;
@@ -285,10 +286,10 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         insn.iop      = EM_IOP_ADD;
         insn.op_carry = true;
         insn.op_wide  = EM_OPCODE_W_BIT(opcode);
+        insn.op_sign  = EM_OPCODE_S_BIT(opcode);
         bytes         = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, modrm, bytes);
         insn.rhs      = EM_AMODE_IMM;
-        insn.op_wide  = EM_OPCODE_W_BIT(opcode);
-        bytes         = em_insn_fetch_imm(&insn, EM_OPCODE_S_BIT(opcode), bytes);
+        bytes         = em_insn_fetch_imm(&insn, EM_OPCODE_W_BIT(opcode), bytes);
 
     } else if ((opcode & 0xfc) == 0x14) { // Accumulator, immediate.
         insn.iop      = EM_IOP_ADD;
@@ -335,10 +336,10 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         bytes++;                                                         // MODRM byte.
         insn.iop     = EM_IOP_SUB;
         insn.op_wide = EM_OPCODE_W_BIT(opcode);
+        insn.op_sign = EM_OPCODE_S_BIT(opcode);
         bytes        = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, modrm, bytes);
         insn.rhs     = EM_AMODE_IMM;
-        insn.op_wide = EM_OPCODE_W_BIT(opcode);
-        bytes        = em_insn_fetch_imm(&insn, EM_OPCODE_S_BIT(opcode), bytes);
+        bytes        = em_insn_fetch_imm(&insn, EM_OPCODE_W_BIT(opcode), bytes);
 
     } else if ((opcode & 0xfc) == 0x2c) { // Accumulator, immediate.
         insn.iop     = EM_IOP_SUB;
@@ -362,9 +363,10 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         insn.iop      = EM_IOP_SUB;
         insn.op_carry = true;
         insn.op_wide  = EM_OPCODE_W_BIT(opcode);
+        insn.op_sign  = EM_OPCODE_S_BIT(opcode);
         bytes         = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, modrm, bytes);
         insn.rhs      = EM_AMODE_IMM;
-        bytes         = em_insn_fetch_imm(&insn, EM_OPCODE_S_BIT(opcode), bytes);
+        bytes         = em_insn_fetch_imm(&insn, EM_OPCODE_W_BIT(opcode), bytes);
 
     } else if ((opcode & 0xfc) == 0x1c) { // Accumulator, immediate.
         insn.iop      = EM_IOP_SUB;
@@ -413,10 +415,10 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         bytes++;                                                         // MODRM byte.
         insn.iop     = EM_IOP_CMP;
         insn.op_wide = EM_OPCODE_W_BIT(opcode);
+        insn.op_sign = EM_OPCODE_S_BIT(opcode);
         bytes        = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, modrm, bytes);
         insn.rhs     = EM_AMODE_IMM;
-        insn.op_wide = EM_OPCODE_W_BIT(opcode);
-        bytes        = em_insn_fetch_imm(&insn, EM_OPCODE_S_BIT(opcode), bytes);
+        bytes        = em_insn_fetch_imm(&insn, EM_OPCODE_W_BIT(opcode), bytes);
 
     } else if ((opcode & 0xfc) == 0x3c) { // Accumulator, immediate.
         insn.iop     = EM_IOP_CMP;
