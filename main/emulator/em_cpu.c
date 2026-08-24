@@ -257,24 +257,32 @@ void em_cpu_step(em_machine_t *mach) {
             mach->cpu.regs.flags &= ~EM_FLAG_CF;
             mach->cpu.regs.flags |= EM_FLAG_CF * (lhs >> (bits - 1));
             goto shift_flags;
+        shift_flags: {
+            mach->cpu.regs.flags &= ~EM_FLAG_OF;
+            bool old_sign         = (lhs >> (bits - 1)) & 1;
+            bool new_sign         = (res >> (bits - 1)) & 1;
+            mach->cpu.regs.flags |= EM_FLAG_OF * (old_sign != new_sign);
+            goto common_flags;
+        }
+
         case EM_IOP_ROL:
             rhs                  %= bits;
             lhs                  &= mask;
             res                   = (lhs << rhs) | (lhs >> ((bits - rhs) % bits));
             mach->cpu.regs.flags &= ~EM_FLAG_CF;
             mach->cpu.regs.flags |= EM_FLAG_CF * (lhs >> (bits - 1));
-            goto shift_flags;
+            goto rot_flags;
         case EM_IOP_ROR:
             rhs                  %= bits;
             lhs                  &= mask;
             res                   = (lhs >> rhs) | (lhs << ((bits - rhs) % bits));
             mach->cpu.regs.flags &= ~EM_FLAG_CF;
             mach->cpu.regs.flags |= EM_FLAG_CF * (lhs & 1);
-            goto shift_flags;
-        shift_flags: {
+            goto rot_flags;
+        rot_flags: {
             mach->cpu.regs.flags &= ~EM_FLAG_OF;
-            bool old_sign         = (lhs >> (mask - 1)) & 1;
-            bool new_sign         = (res >> (mask - 1)) & 1;
+            bool old_sign         = (lhs >> (bits - 1)) & 1;
+            bool new_sign         = (res >> (bits - 1)) & 1;
             mach->cpu.regs.flags |= EM_FLAG_OF * (old_sign != new_sign);
         } break;
 
