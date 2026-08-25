@@ -234,10 +234,14 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         // TODO: LES instructions.
 #pragma endregion LES
 #pragma region LAHF
-        // TODO: LAHF instructions.
+    } else if (opcode == 0x9f) {
+        insn.iop = EM_IOP_LAHF;
+
 #pragma endregion LAHF
 #pragma region SAHF
-        // TODO: SAHF instructions.
+    } else if (opcode == 0x9e) {
+        insn.iop = EM_IOP_SAHF;
+
 #pragma endregion SAHF
 #pragma region PUSHF
     } else if (opcode == 0x9c) {

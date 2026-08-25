@@ -25,6 +25,10 @@ typedef enum __attribute__((packed)) {
     EM_IOP_POP,
     // Exchange lhs and rhs.
     EM_IOP_XCHG,
+    // Store AH to flags; needs dedicate opcode due to bitmask.
+    EM_IOP_SAHF,
+    // Load AH from flags; needs dedicate opcode due to bitmask.
+    EM_IOP_LAHF,
     // I/O port read.
     EM_IOP_IOREAD,
     // I/O port write.

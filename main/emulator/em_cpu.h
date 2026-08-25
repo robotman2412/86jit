@@ -79,6 +79,10 @@ typedef struct em_cpu     em_cpu_t;
 // CPU registers.
 union em_cpu_regs {
     struct {
+        // General registers (byte).
+        uint8_t al, ah, cl, ch, dl, dh, bl, bh;
+    };
+    struct {
         // General registers.
         uint16_t ax, cx, dx, bx;
         // Pointers and index group.
@@ -114,6 +118,9 @@ union em_cpu_regs {
 #define EM_FLAG_IF (1u << 9)
 // Flags register: Trap flag.
 #define EM_FLAG_TF (1u << 8)
+
+// Flags saved/loaded by SAHF/LAHF.
+#define EM_SAHF_LAHF (EM_FLAG_SF | EM_FLAG_ZF | EM_FLAG_AF | EM_FLAG_PF | EM_FLAG_CF)
 
 // Full emulator CPU state.
 struct em_cpu {

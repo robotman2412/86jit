@@ -194,6 +194,8 @@ void em_cpu_step(em_machine_t *mach) {
     switch (insn.iop) {
         case EM_IOP_ILLEGAL:
         case EM_IOP_NOP:
+        case EM_IOP_LAHF:
+        case EM_IOP_SAHF:
         case EM_IOP_POP: break;
 
         case EM_IOP_MOV: rhs = read_operand(mach, &insn, insn.rhs); break;
@@ -236,6 +238,11 @@ void em_cpu_step(em_machine_t *mach) {
             break;
         case EM_IOP_NOP: break;
 
+        case EM_IOP_LAHF: mach->cpu.regs.ah = flags & EM_SAHF_LAHF; break;
+        case EM_IOP_SAHF:
+            flags &= ~EM_SAHF_LAHF;
+            flags |= mach->cpu.regs.ah & EM_SAHF_LAHF;
+            break;
         case EM_IOP_MOV: res = rhs; break;
         case EM_IOP_PUSH: stack_push(mach, lhs); break;
         case EM_IOP_POP: res = stack_pop(mach); break;
@@ -376,6 +383,8 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_NOP:
         case EM_IOP_PUSH:
         case EM_IOP_TEST:
+        case EM_IOP_LAHF:
+        case EM_IOP_SAHF:
         case EM_IOP_CMP: break;
 
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();

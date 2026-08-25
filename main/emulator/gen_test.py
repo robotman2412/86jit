@@ -156,7 +156,11 @@ decode_tests = [
     DT("dec  word [56]",      decd_insn("sub",  "addr", "imm", [],            addr=56, imm=1, op_wide=True)),
     DT("dec  ax",             decd_insn("sub",  "reg1", "imm", ["ax"],        imm=1, op_wide=True)),
     DT("neg  word [56]",      decd_insn("neg",  "addr", None,  [],            addr=56, op_wide=True)),
-    DT("neg  ax",             decd_insn("neg",  "reg2", None,  ["ax"], op_wide=True)),
+    DT("neg  ax",             decd_insn("neg",  "reg2", None,  ["ax"],        op_wide=True)),
+
+    # Miscellaneous.
+    DT("lahf",                decd_insn("lahf")),
+    DT("sahf",                decd_insn("sahf")),
 ]
 
 class ParityTest:
@@ -165,6 +169,8 @@ class ParityTest:
         self.snippet = snippet
 PT = ParityTest
 
+# Some tests or instructions are marked as "AMD conflict"; their behaviour under KVM does not match Intel CPUs.
+# Since this emulator implements the Intel semantics, these failures can be ignored.
 parity_tests = [
     PT("load const", """
         mov  ax, 0xcafe
@@ -224,7 +230,7 @@ parity_tests = [
         sar  bx, cl
     """),
     PT("multi-bit shift", """
-        mov  ax, 0x09
+        mov  ax, 0x09            # AMD conflict (entire test)
         mov  bx, -1
         mov  cl, 4
         ror  ax, cl
@@ -235,7 +241,7 @@ parity_tests = [
         sar  bx, cl
     """),
     PT("rotate with carry", """
-        mov  ax, 0x09
+        mov  ax, 0x09            # AMD conflict (entire test)
         mov  cl, 9
         rcr  ax, 1
         rcl  ax, 1
@@ -262,6 +268,10 @@ parity_tests = [
         cli
         std
         cld
+        mov ah, 0xff
+        sahf
+        xor ah, ah
+        lahf            # AMD conflict
     """),
 ]
 
