@@ -25,8 +25,8 @@
 
 
 static bool decode_test(em_decode_test_t const *test) {
-    printf("  %-18s  ", test->text);
-    em_insn_t insn = em_insn_decode(test->data);
+    printf("  %-20s  ", test->text);
+    em_insn_t insn = em_insn_decode(0, test->data);
     bool      fail = memcmp(&insn, &test->decd, sizeof(em_insn_t));
     if (fail) {
         printf("\033[31mFAILED\033[0m\n");
@@ -35,21 +35,24 @@ static bool decode_test(em_decode_test_t const *test) {
             printf(" %02x", test->data[x]);
         }
         printf("\n");
-        printf("              EXPECT  ACTUAL\n");
-        printf("    length:   %-3d     %-3d\n", test->decd.length, insn.length);
-        printf("    seg_pfx:  %-3d     %-3d\n", test->decd.seg_pfx, insn.seg_pfx);
-        printf("    iop:      %-3d     %-3d\n", test->decd.iop, insn.iop);
-        printf("    op_carry: %-3d     %-3d\n", test->decd.op_carry, insn.op_carry);
-        printf("    op_sign:  %-3d     %-3d\n", test->decd.op_sign, insn.op_sign);
-        printf("    op_wide:  %-3d     %-3d\n", test->decd.op_wide, insn.op_wide);
-        printf("    op_no_cf: %-3d     %-3d\n", test->decd.op_no_cf, insn.op_no_cf);
-        printf("    reg1:     0x%02x    0x%02x\n", test->decd.reg1, insn.reg1);
-        printf("    reg2:     0x%02x    0x%02x\n", test->decd.reg2, insn.reg2);
-        printf("    reg3:     0x%02x    0x%02x\n", test->decd.reg3, insn.reg3);
-        printf("    lhs:      %-3d     %-3d\n", test->decd.lhs, insn.lhs);
-        printf("    rhs:      %-3d     %-3d\n", test->decd.rhs, insn.rhs);
-        printf("    addr:     0x%04x  0x%04x\n", test->decd.addr, insn.addr);
-        printf("    imm:      0x%04x  0x%04x\n", test->decd.imm, insn.imm);
+        printf("                EXPECT  ACTUAL\n");
+        printf("    length:     %-3d     %-3d\n", test->decd.length, insn.length);
+        printf("    seg_pfx:    %-3d     %-3d\n", test->decd.seg_pfx, insn.seg_pfx);
+        printf("    iop:        %-3d     %-3d\n", test->decd.iop, insn.iop);
+        printf("    branch:     %-3d     %-3d\n", test->decd.branch, insn.branch);
+        printf("    op_carry:   %-3d     %-3d\n", test->decd.op_carry, insn.op_carry);
+        printf("    op_sign:    %-3d     %-3d\n", test->decd.op_sign, insn.op_sign);
+        printf("    op_wide:    %-3d     %-3d\n", test->decd.op_wide, insn.op_wide);
+        printf("    op_no_cf:   %-3d     %-3d\n", test->decd.op_no_cf, insn.op_no_cf);
+        printf("    neg_branch: %-3d     %-3d\n", test->decd.branch, insn.neg_branch);
+        printf("    reg1:       0x%02x    0x%02x\n", test->decd.reg1, insn.reg1);
+        printf("    reg2:       0x%02x    0x%02x\n", test->decd.reg2, insn.reg2);
+        printf("    reg3:       0x%02x    0x%02x\n", test->decd.reg3, insn.reg3);
+        printf("    lhs:        %-3d     %-3d\n", test->decd.lhs, insn.lhs);
+        printf("    rhs:        %-3d     %-3d\n", test->decd.rhs, insn.rhs);
+        printf("    addr:       0x%04x  0x%04x\n", test->decd.addr, insn.addr);
+        printf("    imm:        0x%04x  0x%04x\n", test->decd.imm, insn.imm);
+        printf("    cs:         0x%04x  0x%04x\n", test->decd.cs, insn.cs);
     } else {
         printf("\033[32mOK\033[0m\n");
     }
@@ -70,7 +73,7 @@ static void parity_setup() {
 }
 
 static bool parity_test(em_parity_test_t const *test) {
-    printf("  %-18s  ", test->name);
+    printf("  %-20s  ", test->name);
     fflush(stdout);
 
     uint16_t const vm_ip     = 0x0000;
@@ -181,10 +184,10 @@ static bool parity_test(em_parity_test_t const *test) {
     memcpy(kvm_ram + code_gpma, test->code, test->code_len);
     memcpy(mach.ram + code_gpma, test->code, test->code_len);
 
-    bool     fail   = false;
-    size_t   line   = 0;
-    uint16_t old_ip = mach.cpu.regs.ip;
-    uint16_t old_cs = mach.cpu.regs.cs;
+    bool     fail       = false;
+    size_t   exec_count = 0;
+    uint16_t old_ip     = mach.cpu.regs.ip;
+    uint16_t old_cs     = mach.cpu.regs.cs;
     while (mach.cpu.regs.ip < test->code_len && !fail) {
         old_ip = mach.cpu.regs.ip;
         old_cs = mach.cpu.regs.cs;
@@ -226,23 +229,23 @@ static bool parity_test(em_parity_test_t const *test) {
         for (size_t i = 0; i < EM_REGNO16_COUNT; i++) {
             if (expect.reg16[i] != mach.cpu.regs.reg16[i]) {
                 if (!fail) {
-                    printf("\033[31mFAILED\033[0m\n    WHERE    EXPECT  ACTUAL\n");
+                    printf("\033[31mFAILED\033[0m\n    WHERE       EXPECT  ACTUAL\n");
                 }
-                printf("    %-7s  0x%04x  0x%04x\n", em_regno_name(i), expect.reg16[i], mach.cpu.regs.reg16[i]);
+                printf("    %-10s  0x%04x  0x%04x\n", em_regno_name(i), expect.reg16[i], mach.cpu.regs.reg16[i]);
                 fail = true;
             }
         }
 
-        line++;
+        exec_count++;
     }
 
     if (memcmp(kvm_ram, mach.ram, EM_RAM_SIZE)) {
         if (!fail) {
-            printf("\033[31mFAILED\033[0m\n    WHERE    EXPECT  ACTUAL\n");
+            printf("\033[31mFAILED\033[0m\n    WHERE       EXPECT  ACTUAL\n");
         }
         for (size_t i = 0; i < EM_RAM_SIZE; i++) {
             if (kvm_ram[i] != mach.ram[i]) {
-                printf("    0x%05zx  0x%02x    0x%02x\n", i, kvm_ram[i], mach.ram[i]);
+                printf("    0x%05zx     0x%02x    0x%02x\n", i, kvm_ram[i], mach.ram[i]);
             }
         }
         fail = true;
@@ -253,9 +256,9 @@ static bool parity_test(em_parity_test_t const *test) {
 
     if (fail) {
         printf("    DEBUG\n");
-        printf("    cs:ip    0x%04x:0x%04x\n", old_cs, old_ip);
-        printf("    line     %zd\n", line);
-        printf("    insn    ");
+        printf("    cs:ip       0x%04x:0x%04x\n", old_cs, old_ip);
+        printf("    #insn exec  %zd\n", exec_count);
+        printf("    insn       ");
         for (uint16_t i = old_ip; i != regs.rip; i++) {
             printf(" %02x", kvm_ram[sregs.cs.base * 16 + i]);
         }

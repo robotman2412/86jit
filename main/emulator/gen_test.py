@@ -71,6 +71,8 @@ def decd_insn(
         op_wide: bool|None = None,
         op_no_cf: bool|None = None,
         seg_pfx: str = "NONE",
+        branch: str|None = None,
+        neg_branch: bool|None = None,
     ) -> dict[str, str]:
     res = { "iop": "EM_IOP_" + iop.upper() }
     if lhs != None:
@@ -95,6 +97,10 @@ def decd_insn(
     if op_no_cf != None:
         res["op_no_cf"] = "true" if op_no_cf else "false"
     res["seg_pfx"] = "EM_SEGNO_" + seg_pfx.upper()
+    if branch != None:
+        res["branch"] = "EM_BRANCH_" + branch.upper()
+    if neg_branch != None:
+        res["neg_branch"] = "true" if neg_branch else "false"
     return res
 
 class DecodeTest:
@@ -115,6 +121,29 @@ decode_tests = [
     DT("push dx",             decd_insn("push", "reg1", None,   ["dx"],       op_wide=True)),
     DT("pop  ax",             decd_insn("pop",  "reg1", None,   ["ax"],       op_wide=True)),
     DT("pushf",               decd_insn("push", "reg1", None,   ["flags"],    op_wide=True)),
+
+    # Control transfer.
+    DT("jo     $+10",         decd_insn("jump", "imm", imm=10, branch="of")),
+    DT("jc     $+10",         decd_insn("jump", "imm", imm=10, branch="cf")),
+    DT("jz     $+10",         decd_insn("jump", "imm", imm=10, branch="zf")),
+    DT("jbe    $+10",         decd_insn("jump", "imm", imm=10, branch="below_eq")),
+    DT("js     $+10",         decd_insn("jump", "imm", imm=10, branch="sf")),
+    DT("jp     $+10",         decd_insn("jump", "imm", imm=10, branch="pf")),
+    DT("jl     $+10",         decd_insn("jump", "imm", imm=10, branch="less")),
+    DT("jle    $+10",         decd_insn("jump", "imm", imm=10, branch="less_eq")),
+    DT("jno    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="of")),
+    DT("jnc    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="cf")),
+    DT("jnz    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="zf")),
+    DT("jnbe   $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="below_eq")),
+    DT("jns    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="sf")),
+    DT("jnp    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="pf")),
+    DT("jnl    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="less")),
+    DT("jnle   $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="less_eq")),
+    DT("loop   $+10",         decd_insn("jump", "imm", imm=10, branch="loop")),
+    DT("loopne $+10",         decd_insn("jump", "imm", imm=10, branch="loop_ne")),
+    DT("loope  $+10",         decd_insn("jump", "imm", imm=10, branch="loop_eq")),
+    DT("jmp    $+10",         decd_insn("jump", "imm", imm=10, branch="always")),
+    DT("jmp    $+400",        decd_insn("jump", "imm", imm=400, branch="always")),
 
     # Segment override.
     # DT("ds mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ds", addr=3)),
@@ -230,7 +259,7 @@ parity_tests = [
         sar  bx, cl
     """),
     PT("multi-bit shift", """
-        mov  ax, 0x09            # AMD conflict (entire test)
+        mov  ax, 0x09            ; AMD conflict (entire test).
         mov  bx, -1
         mov  cl, 4
         ror  ax, cl
@@ -241,7 +270,7 @@ parity_tests = [
         sar  bx, cl
     """),
     PT("rotate with carry", """
-        mov  ax, 0x09            # AMD conflict (entire test)
+        mov  ax, 0x09            ; AMD conflict (entire test).
         mov  cl, 9
         rcr  ax, 1
         rcl  ax, 1
@@ -271,7 +300,64 @@ parity_tests = [
         mov ah, 0xff
         sahf
         xor ah, ah
-        lahf            # AMD conflict
+        lahf            ; AMD conflict.
+    """),
+    PT("branch", """
+        nop             ; To make the first offset not relative to 0.
+        jnz  rel_label  ; Tests both the offset and that it can actually branch.
+        nop             ; To make fails distinguishable.
+rel_label:
+        ; Positive conditions.
+        jz   fail       
+        js   fail
+        jc   fail
+        jp   fail
+        jo   fail
+        jl   fail
+        jbe  fail       ; Also includes the equal clause for these two.
+        jle  fail
+        mov  ax, 10     ; Strict greater-than (unsigned).
+        cmp  ax, 8
+        jl   fail
+        jle  fail
+        jb   fail
+        jbe  fail
+        mov  ax, -7     ; Strict greater-than (signed).
+        cmp  ax, -3
+        jl   fail
+        jle  fail
+        ; Negative conditions.
+        mov  ah, 0xff   ; Cause ZF, SF, CF, PF and OF to be set.
+        sahf
+        jnz  fail       
+        jns  fail
+        jnc  fail
+        jnp  fail
+        jno  fail
+        jnle fail       ; Also includes equal clause for these two.
+        jnbe fail
+        mov ax, 8       ; Strict less-than (unsigned).
+        cmp ax, 10
+        jnl  fail
+        jnle fail
+        jnb  fail
+        jnbe fail
+        mov ax, -8      ; Strict less-than (signed).
+        cmp ax, -4
+        jnl  fail
+        jnle fail
+        nop             ; To make fails distinguishable.
+fail:
+    """),
+    PT("loops", """
+        mov cx, 3
+        loop endl1
+        nop
+        nop
+endl1:
+        loop fail
+        nop
+fail:
     """),
 ]
 

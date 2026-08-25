@@ -16,6 +16,8 @@ typedef enum __attribute__((packed)) {
     EM_IOP_ILLEGAL,
     // No-operation.
     EM_IOP_NOP,
+    // Jump or branch.
+    EM_IOP_JUMP,
 
     // Move (copy rhs to lhs).
     EM_IOP_MOV,
@@ -85,6 +87,37 @@ typedef enum __attribute__((packed)) {
     EM_AMODE_PTR23,
 } em_amode_t;
 
+// Branch conditions.
+typedef enum __attribute__((packed)) {
+    // Branch on OF.
+    EM_BRANCH_OF,
+    // Branch on CF.
+    EM_BRANCH_CF,
+    // Branch on ZF.
+    EM_BRANCH_ZF,
+    // Branch on (CF | ZF).
+    EM_BRANCH_BELOW_EQ,
+    // Branch on SF.
+    EM_BRANCH_SF,
+    // Branch on PF.
+    EM_BRANCH_PF,
+    // Branch on (SF ^ OF).
+    EM_BRANCH_LESS,
+    // Branch on ((SF ^ OF) | ZF).
+    EM_BRANCH_LESS_EQ,
+
+    // Branch on cx == 0.
+    EM_BRANCH_CXZ,
+    // Branch on cx != 0, otherwide decrement.
+    EM_BRANCH_LOOP,
+    // Branch on cx != 0 && !ZF, otherwide decrement.
+    EM_BRANCH_LOOP_NE,
+    // Branch on cx != 0 && ZF, otherwide decrement.
+    EM_BRANCH_LOOP_EQ,
+    // Unconditional.
+    EM_BRANCH_ALWAYS,
+} em_branch_t;
+
 
 
 // A single fetched instruction.
@@ -96,17 +129,22 @@ struct em_insn {
     uint8_t length;
 
     // Basic operation to perform.
-    em_iop_t iop;
+    em_iop_t    iop;
+    // Branch condition.
+    em_branch_t branch;
+
     // Use carry flag as carry-in.
-    uint8_t  op_carry : 1;
+    uint8_t op_carry   : 1;
     // Perform signed operation.
-    uint8_t  op_sign  : 1;
+    uint8_t op_sign    : 1;
     // Operation is 16-bit.
-    uint8_t  op_wide  : 1;
+    uint8_t op_wide    : 1;
     // Do not write CF (used by `INC` and `DEC`).
-    uint8_t  op_no_cf : 1;
+    uint8_t op_no_cf   : 1;
     // Lock bus during operation.
-    uint8_t  lock_pfx : 1;
+    uint8_t lock_pfx   : 1;
+    // Invert branch condition.
+    uint8_t neg_branch : 1;
 
     // Register indices.
     em_regno_t reg1, reg2, reg3;
@@ -119,12 +157,10 @@ struct em_insn {
 
     // Address/displacement value ("DISP-LO" and "DISP-HI").
     uint16_t addr;
-    union {
-        // Immediate value ("data").
-        uint16_t imm;
-        // Code segment selector.
-        uint16_t cs;
-    };
+    // Immediate value ("data").
+    uint16_t imm;
+    // Code segment selector.
+    uint16_t cs;
 };
 
 // Get opcode from byte 0.
@@ -154,4 +190,4 @@ struct em_insn {
 
 // Decode one instruction.
 // The provided buffer should be at least 6 bytes large.
-em_insn_t em_insn_decode(uint8_t const *bytes);
+em_insn_t em_insn_decode(uint16_t ip, uint8_t const *bytes);

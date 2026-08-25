@@ -95,7 +95,7 @@ static uint8_t const *em_insn_fetch_imm(em_insn_t *insn, bool wide, uint8_t cons
 
 // Decode one instruction.
 // The provided buffer should be at least 6 bytes large.
-em_insn_t em_insn_decode(uint8_t const *bytes) {
+em_insn_t em_insn_decode(uint16_t ip, uint8_t const *bytes) {
     uint8_t const *const base   = bytes;
     uint8_t const        opcode = *(bytes++);
     uint8_t const        modrm  = *bytes;
@@ -727,6 +727,81 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
 #pragma endregion String manipulation
 
 #pragma region Control transfer
+#pragma region Branches
+    } else if ((opcode & 0xf0) == 0x70) {
+        insn.iop        = EM_IOP_JUMP;
+        insn.branch     = (opcode >> 1) & 7;
+        insn.neg_branch = opcode & 1;
+        insn.lhs        = EM_AMODE_IMM;
+        int8_t off      = *bytes;
+        bytes++;
+        insn.imm = ip + off + 2;
+
+#pragma endregion Branches
+#pragma region LOOP
+    } else if (opcode == 0xe2) {
+        insn.iop        = EM_IOP_JUMP;
+        insn.branch     = EM_BRANCH_LOOP;
+        insn.neg_branch = false;
+        insn.lhs        = EM_AMODE_IMM;
+        int8_t off      = *bytes;
+        bytes++;
+        insn.imm = ip + off + 2;
+
+#pragma endregion LOOP
+#pragma region LOOPE
+    } else if (opcode == 0xe1) {
+        insn.iop        = EM_IOP_JUMP;
+        insn.branch     = EM_BRANCH_LOOP_EQ;
+        insn.neg_branch = false;
+        insn.lhs        = EM_AMODE_IMM;
+        int8_t off      = *bytes;
+        bytes++;
+        insn.imm = ip + off + 2;
+
+#pragma endregion LOOPE
+#pragma region LOOPNE
+    } else if (opcode == 0xe0) {
+        insn.iop        = EM_IOP_JUMP;
+        insn.branch     = EM_BRANCH_LOOP_NE;
+        insn.neg_branch = false;
+        insn.lhs        = EM_AMODE_IMM;
+        int8_t off      = *bytes;
+        bytes++;
+        insn.imm = ip + off + 2;
+
+#pragma endregion LOOPNE
+#pragma region JCXZ
+    } else if (opcode == 0xe0) {
+        insn.iop        = EM_IOP_JUMP;
+        insn.branch     = EM_BRANCH_CXZ;
+        insn.neg_branch = false;
+        insn.lhs        = EM_AMODE_IMM;
+        int8_t off      = *bytes;
+        bytes++;
+        insn.imm = ip + off + 2;
+
+#pragma endregion JCXZ
+#pragma region JMP
+    } else if (opcode == 0xe9) { // Direct long.
+        insn.iop         = EM_IOP_JUMP;
+        insn.branch      = EM_BRANCH_ALWAYS;
+        insn.neg_branch  = false;
+        insn.lhs         = EM_AMODE_IMM;
+        int16_t off      = bytes[0] + bytes[1] * 0x100;
+        bytes           += 2;
+        insn.imm         = ip + off + 3;
+
+    } else if (opcode == 0xeb) { // Direct short.
+        insn.iop        = EM_IOP_JUMP;
+        insn.branch     = EM_BRANCH_ALWAYS;
+        insn.neg_branch = false;
+        insn.lhs        = EM_AMODE_IMM;
+        int8_t off      = *bytes;
+        bytes++;
+        insn.imm = ip + off + 2;
+
+#pragma endregion JMP
 #pragma endregion Control transfer
 
 #pragma region Processor control

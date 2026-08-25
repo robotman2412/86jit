@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 
+
 char const *em_regno_name(em_regno_t regno) {
     switch (regno) {
         case EM_REGNO_AX: return "ax";
@@ -65,7 +66,7 @@ static em_insn_t em_cpu_fetch(em_machine_t *mach) {
     for (int i = 0; i < 6; i++) {
         buf[i] = mach->ram[(mach->cpu.regs.cs * 16 + (mach->cpu.regs.ip + i) % 0x10000) % EM_RAM_SIZE];
     }
-    em_insn_t insn     = em_insn_decode(buf);
+    em_insn_t insn     = em_insn_decode(mach->cpu.regs.ip, buf);
     mach->cpu.regs.ip += insn.length;
     return insn;
 }
@@ -155,7 +156,7 @@ static void write_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t 
     }
     switch (amode) {
         case EM_AMODE_NONE:
-        case EM_AMODE_IMM: abort();
+        case EM_AMODE_IMM: abort(); // TODO: Return illegal-instruction indicator.
         case EM_AMODE_REG1: em_cpu_write_reg(&mach->cpu, insn->reg1, value); return;
         case EM_AMODE_REG2: em_cpu_write_reg(&mach->cpu, insn->reg2, value); return;
         case EM_AMODE_ADDR: write_mem(mach, seg, insn->addr, insn->op_wide, value); return;
@@ -184,6 +185,45 @@ static uint16_t stack_pop(em_machine_t *mach) {
     return res;
 }
 
+static inline bool test_branch_cond(em_cpu_regs_t *regs, em_branch_t cond) {
+    bool of = regs->flags & EM_FLAG_OF;
+    bool cf = regs->flags & EM_FLAG_CF;
+    bool zf = regs->flags & EM_FLAG_ZF;
+    bool sf = regs->flags & EM_FLAG_SF;
+    bool pf = regs->flags & EM_FLAG_PF;
+    switch (cond) {
+        case EM_BRANCH_OF: return of;
+        case EM_BRANCH_CF: return cf;
+        case EM_BRANCH_ZF: return zf;
+        case EM_BRANCH_BELOW_EQ: return cf | zf;
+        case EM_BRANCH_SF: return sf;
+        case EM_BRANCH_PF: return pf;
+        case EM_BRANCH_LESS: return sf ^ of;
+        case EM_BRANCH_LESS_EQ: return (sf ^ of) | zf;
+        case EM_BRANCH_CXZ: return regs->cx == 0;
+        case EM_BRANCH_LOOP:
+            if (regs->cx != 0) {
+                regs->cx--;
+                return true;
+            }
+            return false;
+        case EM_BRANCH_LOOP_NE:
+            if (regs->cx != 0 && !zf) {
+                regs->cx--;
+                return true;
+            }
+            return false;
+        case EM_BRANCH_LOOP_EQ:
+            if (regs->cx != 0 && zf) {
+                regs->cx--;
+                return true;
+            }
+            return false;
+        case EM_BRANCH_ALWAYS: return true;
+    }
+    abort();
+}
+
 // Step the CPU one instruction.
 void em_cpu_step(em_machine_t *mach) {
     em_insn_t insn = em_cpu_fetch(mach);
@@ -198,9 +238,12 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_SAHF:
         case EM_IOP_POP: break;
 
-        case EM_IOP_MOV: rhs = read_operand(mach, &insn, insn.rhs); break;
+        case EM_IOP_JUMP:
         case EM_IOP_PUSH: lhs = read_operand(mach, &insn, insn.lhs); break;
-        case EM_IOP_NEG: rhs = read_operand(mach, &insn, insn.lhs); break; // Implemented through sub.
+
+        case EM_IOP_MOV: rhs = read_operand(mach, &insn, insn.rhs); break;
+
+        case EM_IOP_NEG: rhs = read_operand(mach, &insn, insn.lhs); break;
 
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
         case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
@@ -237,6 +280,11 @@ void em_cpu_step(em_machine_t *mach) {
             // TODO: EM_IOP_ILLEGAL
             break;
         case EM_IOP_NOP: break;
+        case EM_IOP_JUMP:
+            if (test_branch_cond(&mach->cpu.regs, insn.branch) ^ insn.neg_branch) {
+                mach->cpu.regs.ip = lhs;
+            }
+            break;
 
         case EM_IOP_LAHF: mach->cpu.regs.ah = flags & EM_SAHF_LAHF; break;
         case EM_IOP_SAHF:
@@ -385,6 +433,7 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_TEST:
         case EM_IOP_LAHF:
         case EM_IOP_SAHF:
+        case EM_IOP_JUMP:
         case EM_IOP_CMP: break;
 
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
