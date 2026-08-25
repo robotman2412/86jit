@@ -253,6 +253,16 @@ parity_tests = [
         push dx
         popf
     """),
+    PT("flags", """
+        stc
+        cmc
+        cmc
+        clc
+        sti
+        cli
+        std
+        cld
+    """),
 ]
 
 fd = open("test/em_test_cases.c", "w")

@@ -7,6 +7,7 @@
 #include "em_cpu.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 
 
@@ -725,6 +726,75 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
 #pragma endregion Control transfer
 
 #pragma region Processor control
+#pragma region CLC
+    } else if (opcode == 0xf8) {
+        insn.iop  = EM_IOP_AND;
+        insn.lhs  = EM_AMODE_REG1;
+        insn.rhs  = EM_AMODE_IMM;
+        insn.reg1 = EM_REGNO_FLAGS;
+        insn.imm  = (uint16_t)~EM_FLAG_CF;
+
+#pragma endregion CLC
+#pragma region CMC
+    } else if (opcode == 0xf5) {
+        insn.iop  = EM_IOP_XOR;
+        insn.lhs  = EM_AMODE_REG1;
+        insn.rhs  = EM_AMODE_IMM;
+        insn.reg1 = EM_REGNO_FLAGS;
+        insn.imm  = EM_FLAG_CF;
+
+#pragma endregion CMC
+#pragma region STC
+    } else if (opcode == 0xf9) {
+        insn.iop  = EM_IOP_OR;
+        insn.lhs  = EM_AMODE_REG1;
+        insn.rhs  = EM_AMODE_IMM;
+        insn.reg1 = EM_REGNO_FLAGS;
+        insn.imm  = EM_FLAG_CF;
+
+#pragma endregion STC
+#pragma region CLD
+    } else if (opcode == 0xfc) {
+        insn.iop  = EM_IOP_AND;
+        insn.lhs  = EM_AMODE_REG1;
+        insn.rhs  = EM_AMODE_IMM;
+        insn.reg1 = EM_REGNO_FLAGS;
+        insn.imm  = (uint16_t)~EM_FLAG_DF;
+
+#pragma endregion CLD
+#pragma region STD
+    } else if (opcode == 0xfd) {
+        insn.iop  = EM_IOP_OR;
+        insn.lhs  = EM_AMODE_REG1;
+        insn.rhs  = EM_AMODE_IMM;
+        insn.reg1 = EM_REGNO_FLAGS;
+        insn.imm  = EM_FLAG_DF;
+
+#pragma endregion STD
+#pragma region CLI
+    } else if (opcode == 0xfa) {
+        insn.iop  = EM_IOP_AND;
+        insn.lhs  = EM_AMODE_REG1;
+        insn.rhs  = EM_AMODE_IMM;
+        insn.reg1 = EM_REGNO_FLAGS;
+        insn.imm  = (uint16_t)~EM_FLAG_IF;
+
+#pragma endregion CLI
+#pragma region STI
+    } else if (opcode == 0xfb) {
+        insn.iop  = EM_IOP_OR;
+        insn.lhs  = EM_AMODE_REG1;
+        insn.rhs  = EM_AMODE_IMM;
+        insn.reg1 = EM_REGNO_FLAGS;
+        insn.imm  = EM_FLAG_IF;
+
+#pragma endregion STI
+#pragma region HLT
+#pragma endregion HLT
+#pragma region WAIT
+#pragma endregion WAIT
+#pragma region ESC
+#pragma endregion ESC
 #pragma endregion Processor control
     }
 

@@ -368,7 +368,7 @@ void em_cpu_step(em_machine_t *mach) {
             }
         } break;
     }
-    mach->cpu.regs.flags = flags | 2;
+    mach->cpu.regs.flags = flags;
 
     // Write back operands.
     switch (insn.iop) {
@@ -402,4 +402,6 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_MUL:
         case EM_IOP_DIV: write_operand(mach, &insn, insn.lhs, res); break;
     }
+    mach->cpu.regs.flags |= 0x0002;
+    mach->cpu.regs.flags &= 0x0fd7;
 }

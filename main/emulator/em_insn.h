@@ -101,6 +101,8 @@ struct em_insn {
     uint8_t  op_wide  : 1;
     // Do not write CF (used by `INC` and `DEC`).
     uint8_t  op_no_cf : 1;
+    // Lock bus during operation.
+    uint8_t  lock_pfx : 1;
 
     // Register indices.
     em_regno_t reg1, reg2, reg3;
