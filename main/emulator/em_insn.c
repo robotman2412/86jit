@@ -103,7 +103,7 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         .lhs     = EM_AMODE_NONE,
         .rhs     = EM_AMODE_NONE,
         .iop     = EM_IOP_ILLEGAL,
-        .seg_pfx = EM_SEGPFX_NONE,
+        .seg_pfx = EM_SEGNO_NONE,
     };
 
     if (opcode == 0x90) {
@@ -239,10 +239,20 @@ em_insn_t em_insn_decode(uint8_t const *bytes) {
         // TODO: SAHF instructions.
 #pragma endregion SAHF
 #pragma region PUSHF
-        // TODO: PUSHF instructions.
+    } else if (opcode == 0x9c) {
+        insn.iop     = EM_IOP_PUSH;
+        insn.lhs     = EM_AMODE_REG1;
+        insn.reg1    = EM_REGNO_FLAGS;
+        insn.op_wide = true;
+
 #pragma endregion PUSHF
 #pragma region POPF
-        // TODO: POPF instructions.
+    } else if (opcode == 0x9d) {
+        insn.iop     = EM_IOP_POP;
+        insn.lhs     = EM_AMODE_REG1;
+        insn.reg1    = EM_REGNO_FLAGS;
+        insn.op_wide = true;
+
 #pragma endregion POPF
 
 #pragma endregion Data transfer

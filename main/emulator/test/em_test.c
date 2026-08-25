@@ -226,9 +226,9 @@ static bool parity_test(em_parity_test_t const *test) {
         for (size_t i = 0; i < EM_REGNO16_COUNT; i++) {
             if (expect.reg16[i] != mach.cpu.regs.reg16[i]) {
                 if (!fail) {
-                    printf("\033[31mFAILED\033[0m\n    WHERE   EXPECT  ACTUAL\n");
+                    printf("\033[31mFAILED\033[0m\n    WHERE    EXPECT  ACTUAL\n");
                 }
-                printf("    %-6s  0x%04x  0x%04x\n", em_regno_name(i), expect.reg16[i], mach.cpu.regs.reg16[i]);
+                printf("    %-7s  0x%04x  0x%04x\n", em_regno_name(i), expect.reg16[i], mach.cpu.regs.reg16[i]);
                 fail = true;
             }
         }
@@ -238,11 +238,11 @@ static bool parity_test(em_parity_test_t const *test) {
 
     if (memcmp(kvm_ram, mach.ram, EM_RAM_SIZE)) {
         if (!fail) {
-            printf("\033[31mFAILED\033[0m\n    WHERE   EXPECT  ACTUAL\n");
+            printf("\033[31mFAILED\033[0m\n    WHERE    EXPECT  ACTUAL\n");
         }
         for (size_t i = 0; i < EM_RAM_SIZE; i++) {
             if (kvm_ram[i] != mach.ram[i]) {
-                printf("    0x%04zx  0x%02x    0x%02x\n", i, kvm_ram[i], mach.ram[i]);
+                printf("    0x%05zx  0x%02x    0x%02x\n", i, kvm_ram[i], mach.ram[i]);
             }
         }
         fail = true;
@@ -253,8 +253,13 @@ static bool parity_test(em_parity_test_t const *test) {
 
     if (fail) {
         printf("    DEBUG\n");
-        printf("    cs:ip   0x%04x:0x%04x\n", old_cs, old_ip);
-        printf("    line    %zd\n", line);
+        printf("    cs:ip    0x%04x:0x%04x\n", old_cs, old_ip);
+        printf("    line     %zd\n", line);
+        printf("    insn    ");
+        for (uint16_t i = old_ip; i != regs.rip; i++) {
+            printf(" %02x", kvm_ram[sregs.cs.base * 16 + i]);
+        }
+        printf("\n");
     } else {
         printf("\033[32mOK\033[0m\n");
     }

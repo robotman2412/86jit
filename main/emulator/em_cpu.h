@@ -9,6 +9,15 @@
 
 
 
+// Segment register number.
+typedef enum __attribute__((packed)) {
+    EM_SEGNO_ES,
+    EM_SEGNO_CS,
+    EM_SEGNO_SS,
+    EM_SEGNO_DS,
+    EM_SEGNO_NONE,
+} em_segno_t;
+
 // Register number.
 typedef enum __attribute__((packed)) {
     /* GPRs with W = 1 */

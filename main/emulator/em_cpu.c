@@ -89,35 +89,44 @@ void em_cpu_write_reg(em_cpu_t *cpu, em_regno_t regno, uint16_t value) {
     }
 }
 
-static uint16_t read_mem(em_machine_t *mach, uint16_t addr, bool wide, bool sign) {
+static uint16_t read_mem(em_machine_t *mach, em_segno_t seg, uint16_t off, bool wide, bool sign) {
+    uint16_t base  = mach->cpu.regs.reg16[EM_REGNO_SEG(seg)];
+    size_t   paddr = base * 16 + off;
     if (wide) {
-        return (mach->ram[addr] << 8) | mach->ram[(addr + 1) % 0x10000];
+        return mach->ram[paddr] | (mach->ram[(paddr + 1) % EM_RAM_SIZE] << 8);
     } else if (sign) {
-        return (int8_t)mach->ram[addr];
+        return (int8_t)mach->ram[paddr];
     } else {
-        return mach->ram[addr];
+        return mach->ram[paddr];
     }
 }
 
-static void write_mem(em_machine_t *mach, uint16_t addr, bool wide, uint16_t value) {
-    mach->ram[addr] = value;
+static void write_mem(em_machine_t *mach, em_segno_t seg, uint16_t off, bool wide, uint16_t value) {
+    uint16_t base    = mach->cpu.regs.reg16[EM_REGNO_SEG(seg)];
+    size_t   paddr   = base * 16 + off;
+    mach->ram[paddr] = value;
     if (wide) {
-        mach->ram[(addr + 1) % 0x10000] = value;
+        mach->ram[(paddr + 1) % EM_RAM_SIZE] = value >> 8;
     }
 }
 
 static uint16_t read_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode) {
+    em_segno_t seg = EM_SEGNO_DS;
+    if (insn->seg_pfx != EM_SEGNO_NONE) {
+        seg = insn->seg_pfx;
+    }
     switch (amode) {
         case EM_AMODE_NONE: return 0;
         case EM_AMODE_IMM: return insn->imm;
         case EM_AMODE_REG1: return em_cpu_read_reg(&mach->cpu, insn->reg1, insn->op_sign);
         case EM_AMODE_REG2: return em_cpu_read_reg(&mach->cpu, insn->reg2, insn->op_sign);
-        case EM_AMODE_ADDR: return read_mem(mach, insn->addr, insn->op_wide, insn->op_sign);
+        case EM_AMODE_ADDR: return read_mem(mach, seg, insn->addr, insn->op_wide, insn->op_sign);
         case EM_AMODE_PTR2:
-            return read_mem(mach, insn->addr + mach->cpu.regs.reg16[insn->reg2], insn->op_wide, insn->op_sign);
+            return read_mem(mach, seg, insn->addr + mach->cpu.regs.reg16[insn->reg2], insn->op_wide, insn->op_sign);
         case EM_AMODE_PTR23:
             return read_mem(
                 mach,
+                seg,
                 insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3],
                 insn->op_wide,
                 insn->op_sign
@@ -140,16 +149,21 @@ static uint16_t lea_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_
 }
 
 static void write_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode, uint16_t value) {
+    em_segno_t seg = EM_SEGNO_DS;
+    if (insn->seg_pfx != EM_SEGNO_NONE) {
+        seg = insn->seg_pfx;
+    }
     switch (amode) {
         case EM_AMODE_NONE:
         case EM_AMODE_IMM: abort();
         case EM_AMODE_REG1: em_cpu_write_reg(&mach->cpu, insn->reg1, value); return;
         case EM_AMODE_REG2: em_cpu_write_reg(&mach->cpu, insn->reg2, value); return;
-        case EM_AMODE_ADDR: write_mem(mach, insn->addr, insn->op_wide, value); return;
-        case EM_AMODE_PTR2: write_mem(mach, insn->addr + mach->cpu.regs.reg16[insn->reg2], insn->op_wide, value);
+        case EM_AMODE_ADDR: write_mem(mach, seg, insn->addr, insn->op_wide, value); return;
+        case EM_AMODE_PTR2: write_mem(mach, seg, insn->addr + mach->cpu.regs.reg16[insn->reg2], insn->op_wide, value);
         case EM_AMODE_PTR23:
             write_mem(
                 mach,
+                seg,
                 insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3],
                 insn->op_wide,
                 value
@@ -157,6 +171,17 @@ static void write_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t 
             return;
     }
     abort();
+}
+
+static void stack_push(em_machine_t *mach, uint16_t value) {
+    mach->cpu.regs.sp -= 2;
+    write_mem(mach, EM_SEGNO_SS, mach->cpu.regs.sp, true, value);
+}
+
+static uint16_t stack_pop(em_machine_t *mach) {
+    uint16_t res       = read_mem(mach, EM_SEGNO_SS, mach->cpu.regs.sp, true, false);
+    mach->cpu.regs.sp += 2;
+    return res;
 }
 
 // Step the CPU one instruction.
@@ -168,13 +193,13 @@ void em_cpu_step(em_machine_t *mach) {
     uint16_t rhs = 0;
     switch (insn.iop) {
         case EM_IOP_ILLEGAL:
-        case EM_IOP_NOP: break;
+        case EM_IOP_NOP:
+        case EM_IOP_POP: break;
 
         case EM_IOP_MOV: rhs = read_operand(mach, &insn, insn.rhs); break;
         case EM_IOP_PUSH: lhs = read_operand(mach, &insn, insn.lhs); break;
         case EM_IOP_NEG: rhs = read_operand(mach, &insn, insn.lhs); break; // Implemented through sub.
 
-        case EM_IOP_POP:
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
         case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
 
@@ -206,12 +231,14 @@ void em_cpu_step(em_machine_t *mach) {
     bool      cin    = insn.op_carry && (flags & EM_FLAG_CF);
     int       res    = lhs;
     switch (insn.iop) {
-        case EM_IOP_ILLEGAL: fprintf(stderr, "TODO: EM_IOP_ILLEGAL\n"); abort();
+        case EM_IOP_ILLEGAL:
+            // TODO: EM_IOP_ILLEGAL
+            break;
         case EM_IOP_NOP: break;
 
         case EM_IOP_MOV: res = rhs; break;
-        case EM_IOP_PUSH: break;
-        case EM_IOP_POP: fprintf(stderr, "TODO: EM_IOP_POP\n"); abort();
+        case EM_IOP_PUSH: stack_push(mach, lhs); break;
+        case EM_IOP_POP: res = stack_pop(mach); break;
         case EM_IOP_XCHG: break; // Handled by the writeback.
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
         case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
@@ -341,7 +368,7 @@ void em_cpu_step(em_machine_t *mach) {
             }
         } break;
     }
-    mach->cpu.regs.flags = flags;
+    mach->cpu.regs.flags = flags | 2;
 
     // Write back operands.
     switch (insn.iop) {

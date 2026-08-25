@@ -10,15 +10,6 @@
 
 
 
-// Segment override prefix.
-typedef enum __attribute__((packed)) {
-    EM_SEGPFX_ES,
-    EM_SEGPFX_CS,
-    EM_SEGPFX_SS,
-    EM_SEGPFX_DS,
-    EM_SEGPFX_NONE,
-} em_segpfx_t;
-
 // Basic instruction operations.
 typedef enum __attribute__((packed)) {
     // Illegal instruction.
@@ -115,7 +106,7 @@ struct em_insn {
     em_regno_t reg1, reg2, reg3;
 
     // Segment override register.
-    em_segpfx_t seg_pfx;
+    em_segno_t seg_pfx;
 
     // Addressing mode per operand, if present.
     em_amode_t lhs, rhs;

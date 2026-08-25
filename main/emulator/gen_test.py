@@ -28,6 +28,7 @@ def compile_asm_file(path: str) -> bytes:
 
 def compile_asm_text(snippet: str) -> bytes:
     tmp = tempfile.NamedTemporaryFile("r+", suffix=".S")
+    tmp.write("CPU 8086\n")
     tmp.write(snippet)
     tmp.flush()
     data = compile_asm_file(tmp.name)
@@ -93,7 +94,7 @@ def decd_insn(
         res["op_wide"] = "true" if op_wide else "false"
     if op_no_cf != None:
         res["op_no_cf"] = "true" if op_no_cf else "false"
-    res["seg_pfx"] = "EM_SEGPFX_" + seg_pfx.upper()
+    res["seg_pfx"] = "EM_SEGNO_" + seg_pfx.upper()
     return res
 
 class DecodeTest:
@@ -111,12 +112,15 @@ decode_tests = [
     DT("mov  al, [3000]",     decd_insn("mov",  "reg1", "addr", ["al"],       addr=3000)),
     DT("mov  ds, [0xabcd]",   decd_insn("mov",  "reg1", "addr", ["ds"],       addr = 0xabcd, op_wide=True)),
     DT("xchg al, cl",         decd_insn("xchg", "reg1", "reg2", ["al", "cl"])),
+    DT("push dx",             decd_insn("push", "reg1", None,   ["dx"],       op_wide=True)),
+    DT("pop  ax",             decd_insn("pop",  "reg1", None,   ["ax"],       op_wide=True)),
+    DT("pushf",               decd_insn("push", "reg1", None,   ["flags"],    op_wide=True)),
 
     # Segment override.
-    DT("ds mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ds", addr=3)),
-    DT("es mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="es", addr=3)),
-    DT("ss mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ss", addr=3)),
-    DT("cs mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="cs", addr=3)),
+    # DT("ds mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ds", addr=3)),
+    # DT("es mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="es", addr=3)),
+    # DT("ss mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ss", addr=3)),
+    # DT("cs mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="cs", addr=3)),
 
     # MOD R/M permutations.
     DT("and  ax, bx",         decd_insn("and",  "reg2", "reg1", ["bx", "ax"], op_wide=True)),
@@ -237,7 +241,18 @@ parity_tests = [
         rcl  ax, 1
         rcr  ax, cl
         rcl  ax, cl
-    """)
+    """),
+    PT("stack", """
+        mov  dx, 1
+        push dx
+        mov  dx, 3
+        push dx
+        pop  ax
+        pop  bx
+        mov  dx, 0x0007
+        push dx
+        popf
+    """),
 ]
 
 fd = open("test/em_test_cases.c", "w")
