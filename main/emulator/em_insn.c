@@ -802,6 +802,57 @@ em_insn_t em_insn_decode(uint16_t ip, uint8_t const *bytes) {
         insn.imm = ip + off + 2;
 
 #pragma endregion JMP
+#pragma region CALL
+    } else if (opcode == 0xe8) { // Direct intra-segment.
+        insn.iop     = EM_IOP_CALL;
+        insn.lhs     = EM_AMODE_IMM;
+        int16_t off  = bytes[0] + bytes[1] * 0x100;
+        bytes       += 2;
+        insn.imm     = ip + off + 3;
+
+    } else if (opcode == 0xff && EM_MODRM_OPCODE(modrm) == 2) { // Indirect intra-segment.
+        bytes++;                                                // MODRM byte.
+        insn.iop = EM_IOP_CALL;
+        bytes    = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, modrm, bytes);
+
+    } else if (opcode == 0x9a) { // Direct inter-segment.
+        insn.iop  = EM_IOP_LCALL;
+        insn.lhs  = EM_AMODE_IMM;
+        insn.imm  = bytes[0] + bytes[1] * 0x100;
+        bytes    += 2;
+        insn.cs   = bytes[0] + bytes[1] * 0x100;
+        bytes    += 2;
+
+    } else if (opcode == 0xff && EM_MODRM_OPCODE(modrm) == 3) { // Indirect intra-segment.
+        bytes++;                                                // MODRM byte.
+        insn.iop = EM_IOP_LCALL;
+        bytes    = em_insn_decode_modrm(&insn, MODRM_UNARY_LHS, modrm, bytes);
+
+#pragma endregion CALL
+#pragma region RET
+    } else if (opcode == 0xc3) { // Intra-segment.
+        insn.iop = EM_IOP_RET;
+        insn.lhs = EM_AMODE_IMM;
+        insn.imm = 0;
+
+    } else if (opcode == 0xc2) { // Intra-segment and add to sp.
+        insn.iop  = EM_IOP_RET;
+        insn.lhs  = EM_AMODE_IMM;
+        insn.imm  = bytes[0] + bytes[1] * 0x100;
+        bytes    += 2;
+
+    } else if (opcode == 0xcb) { // Intra-segment.
+        insn.iop = EM_IOP_LRET;
+        insn.lhs = EM_AMODE_IMM;
+        insn.imm = 0;
+
+    } else if (opcode == 0xca) { // Intra-segment and add to sp.
+        insn.iop  = EM_IOP_LRET;
+        insn.lhs  = EM_AMODE_IMM;
+        insn.imm  = bytes[0] + bytes[1] * 0x100;
+        bytes    += 2;
+
+#pragma endregion RET
 #pragma endregion Control transfer
 
 #pragma region Processor control

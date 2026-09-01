@@ -18,6 +18,14 @@ typedef enum __attribute__((packed)) {
     EM_IOP_NOP,
     // Jump or branch.
     EM_IOP_JUMP,
+    // Procedure call.
+    EM_IOP_CALL,
+    // Far procedure call.
+    EM_IOP_LCALL,
+    // Procedure return.
+    EM_IOP_RET,
+    // Far procedure return.
+    EM_IOP_LRET,
 
     // Move (copy rhs to lhs).
     EM_IOP_MOV,

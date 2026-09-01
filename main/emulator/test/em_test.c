@@ -77,10 +77,10 @@ static bool parity_test(em_parity_test_t const *test) {
     fflush(stdout);
 
     uint16_t const vm_ip     = 0x0000;
-    uint16_t const vm_cs     = 0x0000;
-    uint16_t const vm_ds     = 0x1000;
-    uint16_t const vm_ss     = 0x2000;
-    uint16_t const vm_es     = 0x3000;
+    uint16_t const vm_cs     = 0x1000;
+    uint16_t const vm_ds     = 0x8000;
+    uint16_t const vm_ss     = 0x9000;
+    uint16_t const vm_es     = 0x0000;
     size_t const   code_gpma = vm_cs * 16 + vm_ip;
 
 #pragma region KVM setup
@@ -258,10 +258,6 @@ static bool parity_test(em_parity_test_t const *test) {
         printf("    DEBUG\n");
         printf("    cs:ip       0x%04x:0x%04x\n", old_cs, old_ip);
         printf("    #insn exec  %zd\n", exec_count);
-        printf("    insn       ");
-        for (uint16_t i = old_ip; i != regs.rip; i++) {
-            printf(" %02x", kvm_ram[sregs.cs.base * 16 + i]);
-        }
         printf("\n");
     } else {
         printf("\033[32mOK\033[0m\n");

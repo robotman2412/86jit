@@ -111,29 +111,39 @@ static void write_mem(em_machine_t *mach, em_segno_t seg, uint16_t off, bool wid
     }
 }
 
-static uint16_t read_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode) {
+static uint16_t read_operand_offset(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode, bool high) {
     em_segno_t seg = EM_SEGNO_DS;
     if (insn->seg_pfx != EM_SEGNO_NONE) {
         seg = insn->seg_pfx;
     }
     switch (amode) {
         case EM_AMODE_NONE: return 0;
-        case EM_AMODE_IMM: return insn->imm;
+        case EM_AMODE_IMM: return high ? insn->cs : insn->imm;
         case EM_AMODE_REG1: return em_cpu_read_reg(&mach->cpu, insn->reg1, insn->op_sign);
         case EM_AMODE_REG2: return em_cpu_read_reg(&mach->cpu, insn->reg2, insn->op_sign);
-        case EM_AMODE_ADDR: return read_mem(mach, seg, insn->addr, insn->op_wide, insn->op_sign);
+        case EM_AMODE_ADDR: return read_mem(mach, seg, insn->addr + high * 2, insn->op_wide, insn->op_sign);
         case EM_AMODE_PTR2:
-            return read_mem(mach, seg, insn->addr + mach->cpu.regs.reg16[insn->reg2], insn->op_wide, insn->op_sign);
+            return read_mem(
+                mach,
+                seg,
+                insn->addr + mach->cpu.regs.reg16[insn->reg2] + high * 2,
+                insn->op_wide,
+                insn->op_sign
+            );
         case EM_AMODE_PTR23:
             return read_mem(
                 mach,
                 seg,
-                insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3],
+                insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3] + high * 2,
                 insn->op_wide,
                 insn->op_sign
             );
     }
     abort();
+}
+
+static uint16_t read_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode) {
+    return read_operand_offset(mach, insn, amode, 0);
 }
 
 static uint16_t lea_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode) {
@@ -229,8 +239,9 @@ void em_cpu_step(em_machine_t *mach) {
     em_insn_t insn = em_cpu_fetch(mach);
 
     // Fetch operands.
-    uint16_t lhs = 0;
-    uint16_t rhs = 0;
+    uint16_t lhs     = 0;
+    uint16_t rhs     = 0;
+    uint16_t call_cs = 0;
     switch (insn.iop) {
         case EM_IOP_ILLEGAL:
         case EM_IOP_NOP:
@@ -239,7 +250,15 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_POP: break;
 
         case EM_IOP_JUMP:
+        case EM_IOP_CALL:
+        case EM_IOP_RET:
+        case EM_IOP_LRET:
         case EM_IOP_PUSH: lhs = read_operand(mach, &insn, insn.lhs); break;
+
+        case EM_IOP_LCALL:
+            lhs     = read_operand(mach, &insn, insn.lhs);
+            call_cs = read_operand_offset(mach, &insn, insn.lhs, true);
+            break;
 
         case EM_IOP_MOV: rhs = read_operand(mach, &insn, insn.rhs); break;
 
@@ -280,6 +299,25 @@ void em_cpu_step(em_machine_t *mach) {
             // TODO: EM_IOP_ILLEGAL
             break;
         case EM_IOP_NOP: break;
+        case EM_IOP_CALL:
+            stack_push(mach, mach->cpu.regs.ip);
+            mach->cpu.regs.ip = lhs;
+            break;
+        case EM_IOP_LCALL:
+            stack_push(mach, mach->cpu.regs.cs);
+            stack_push(mach, mach->cpu.regs.ip);
+            mach->cpu.regs.ip = lhs;
+            mach->cpu.regs.cs = call_cs;
+            break;
+        case EM_IOP_RET:
+            mach->cpu.regs.ip  = stack_pop(mach);
+            mach->cpu.regs.sp += lhs;
+            break;
+        case EM_IOP_LRET:
+            mach->cpu.regs.ip  = stack_pop(mach);
+            mach->cpu.regs.cs  = stack_pop(mach);
+            mach->cpu.regs.sp += lhs;
+            break;
         case EM_IOP_JUMP:
             if (test_branch_cond(&mach->cpu.regs, insn.branch) ^ insn.neg_branch) {
                 mach->cpu.regs.ip = lhs;
@@ -434,6 +472,10 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_LAHF:
         case EM_IOP_SAHF:
         case EM_IOP_JUMP:
+        case EM_IOP_CALL:
+        case EM_IOP_LCALL:
+        case EM_IOP_RET:
+        case EM_IOP_LRET:
         case EM_IOP_CMP: break;
 
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();

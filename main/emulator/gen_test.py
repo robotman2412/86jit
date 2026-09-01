@@ -66,6 +66,7 @@ def decd_insn(
         reg: list[str|None]|None = None,
         addr: int|None = None,
         imm: int|None = None,
+        cs: int|None = None,
         op_carry: bool|None = None,
         op_sign: bool|None = None,
         op_wide: bool|None = None,
@@ -88,6 +89,8 @@ def decd_insn(
         res["addr"] = f"0x{addr:04x}"
     if imm != None:
         res["imm"] = f"0x{imm:04x}"
+    if cs != None:
+        res["cs"] = f"0x{cs:04x}"
     if op_carry != None:
         res["op_carry"] = "true" if op_carry else "false"
     if op_sign != None:
@@ -123,27 +126,35 @@ decode_tests = [
     DT("pushf",               decd_insn("push", "reg1", None,   ["flags"],    op_wide=True)),
 
     # Control transfer.
-    DT("jo     $+10",         decd_insn("jump", "imm", imm=10, branch="of")),
-    DT("jc     $+10",         decd_insn("jump", "imm", imm=10, branch="cf")),
-    DT("jz     $+10",         decd_insn("jump", "imm", imm=10, branch="zf")),
-    DT("jbe    $+10",         decd_insn("jump", "imm", imm=10, branch="below_eq")),
-    DT("js     $+10",         decd_insn("jump", "imm", imm=10, branch="sf")),
-    DT("jp     $+10",         decd_insn("jump", "imm", imm=10, branch="pf")),
-    DT("jl     $+10",         decd_insn("jump", "imm", imm=10, branch="less")),
-    DT("jle    $+10",         decd_insn("jump", "imm", imm=10, branch="less_eq")),
-    DT("jno    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="of")),
-    DT("jnc    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="cf")),
-    DT("jnz    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="zf")),
-    DT("jnbe   $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="below_eq")),
-    DT("jns    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="sf")),
-    DT("jnp    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="pf")),
-    DT("jnl    $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="less")),
-    DT("jnle   $+10",         decd_insn("jump", "imm", imm=10, neg_branch=True, branch="less_eq")),
-    DT("loop   $+10",         decd_insn("jump", "imm", imm=10, branch="loop")),
-    DT("loopne $+10",         decd_insn("jump", "imm", imm=10, branch="loop_ne")),
-    DT("loope  $+10",         decd_insn("jump", "imm", imm=10, branch="loop_eq")),
-    DT("jmp    $+10",         decd_insn("jump", "imm", imm=10, branch="always")),
-    DT("jmp    $+400",        decd_insn("jump", "imm", imm=400, branch="always")),
+    DT("jo   $+10",           decd_insn("jump",  "imm",  imm=10, branch="of")),
+    DT("jc   $+10",           decd_insn("jump",  "imm",  imm=10, branch="cf")),
+    DT("jz   $+10",           decd_insn("jump",  "imm",  imm=10, branch="zf")),
+    DT("jbe  $+10",           decd_insn("jump",  "imm",  imm=10, branch="below_eq")),
+    DT("js   $+10",           decd_insn("jump",  "imm",  imm=10, branch="sf")),
+    DT("jp   $+10",           decd_insn("jump",  "imm",  imm=10, branch="pf")),
+    DT("jl   $+10",           decd_insn("jump",  "imm",  imm=10, branch="less")),
+    DT("jle  $+10",           decd_insn("jump",  "imm",  imm=10, branch="less_eq")),
+    DT("jno  $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="of")),
+    DT("jnc  $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="cf")),
+    DT("jnz  $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="zf")),
+    DT("jnbe $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="below_eq")),
+    DT("jns  $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="sf")),
+    DT("jnp  $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="pf")),
+    DT("jnl  $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="less")),
+    DT("jnle $+10",           decd_insn("jump",  "imm",  imm=10, neg_branch=True, branch="less_eq")),
+    DT("loop $+10",           decd_insn("jump",  "imm",  imm=10, branch="loop")),
+    DT("loopne   $+10",       decd_insn("jump",  "imm",  imm=10, branch="loop_ne")),
+    DT("loope    $+10",       decd_insn("jump",  "imm",  imm=10, branch="loop_eq")),
+    DT("jmp  $+10",           decd_insn("jump",  "imm",  imm=10, branch="always")),
+    DT("jmp  $+400",          decd_insn("jump",  "imm",  imm=400, branch="always")),
+    DT("call $+10",           decd_insn("call",  "imm",  imm=10)),
+    DT("call [3000]",         decd_insn("call",  "addr", addr=3000)),
+    DT("call 1234:5678",      decd_insn("lcall", "imm",  imm=5678, cs=1234)),
+    DT("call far [3000]",     decd_insn("lcall", "addr", addr=3000)),
+    DT("ret",                 decd_insn("ret",   "imm",  imm=0)),
+    DT("ret  86",             decd_insn("ret",   "imm",  imm=86)),
+    DT("retf",                decd_insn("lret",  "imm",  imm=0)),
+    DT("retf 86",             decd_insn("lret",  "imm",  imm=86)),
 
     # Segment override.
     # DT("ds mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ds", addr=3)),
@@ -358,6 +369,50 @@ endl1:
         loop fail
         nop
 fail:
+    """),
+    PT("near call", """
+        nop
+        call func_1
+        call func_2
+        jmp end
+        nop
+func_1:
+        nop
+        call func_2
+        call func_2
+        nop
+        nop
+        ret
+        nop
+func_2:
+        ret
+        nop
+end:
+    """),
+    PT("far call", """
+        org 0x1000
+code1:  equ 0x1000
+code2:  equ 0x1001
+
+        call code2:func_1-16
+        nop
+        jmp  code2:end-code2*16
+        align 16
+
+func_1:
+        mov ax, cs
+        mov ds, ax
+        call far [func_2_ptr]
+        retf
+        nop
+
+func_2_ptr:
+        dw func_2, code1
+
+func_2:
+        retf
+
+end:
     """),
 ]
 
