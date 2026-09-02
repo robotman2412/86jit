@@ -26,7 +26,7 @@
 
 static bool decode_test(em_decode_test_t const *test) {
     printf("  %-20s  ", test->text);
-    em_insn_t insn = em_insn_decode(0, test->data);
+    em_insn_t insn = em_insn_decode(0, test->data, sizeof(test->data));
     bool      fail = memcmp(&insn, &test->decd, sizeof(em_insn_t));
     if (fail) {
         printf("\033[31mFAILED\033[0m\n");
@@ -258,6 +258,7 @@ static bool parity_test(em_parity_test_t const *test) {
         printf("    DEBUG\n");
         printf("    cs:ip       0x%04x:0x%04x\n", old_cs, old_ip);
         printf("    #insn exec  %zd\n", exec_count);
+        printf("    cx          0x%04x\n", (uint16_t)regs.rcx);
         printf("\n");
     } else {
         printf("\033[32mOK\033[0m\n");

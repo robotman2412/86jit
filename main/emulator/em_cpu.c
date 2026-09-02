@@ -62,13 +62,12 @@ void em_cpu_reset(em_cpu_t *cpu) {
 
 // Fetch an instruction and advance `ip`.
 static em_insn_t em_cpu_fetch(em_machine_t *mach) {
-    uint8_t buf[6];
-    for (int i = 0; i < 6; i++) {
+    size_t const buf_len = 10;
+    uint8_t      buf[buf_len];
+    for (int i = 0; i < buf_len; i++) {
         buf[i] = mach->ram[(mach->cpu.regs.cs * 16 + (mach->cpu.regs.ip + i) % 0x10000) % EM_RAM_SIZE];
     }
-    em_insn_t insn     = em_insn_decode(mach->cpu.regs.ip, buf);
-    mach->cpu.regs.ip += insn.length;
-    return insn;
+    return em_insn_decode(mach->cpu.regs.ip, buf, buf_len);
 }
 
 // Read a CPU register.
@@ -138,6 +137,9 @@ static uint16_t read_operand_offset(em_machine_t *mach, em_insn_t const *insn, e
                 insn->op_wide,
                 insn->op_sign
             );
+        case EM_AMODE_STR_SI: return read_mem(mach, seg, mach->cpu.regs.si++, insn->op_wide, insn->op_sign);
+        case EM_AMODE_STR_DI: return read_mem(mach, seg, mach->cpu.regs.di++, insn->op_wide, insn->op_sign);
+        case EM_AMODE_STR_DSDI: abort();
     }
     abort();
 }
@@ -150,17 +152,21 @@ static uint16_t lea_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_
     switch (amode) {
         case EM_AMODE_NONE:
         case EM_AMODE_IMM:
+        case EM_AMODE_STR_SI:
+        case EM_AMODE_STR_DI:
+        case EM_AMODE_STR_DSDI:
         case EM_AMODE_REG1:
         case EM_AMODE_REG2: abort();
         case EM_AMODE_ADDR: return insn->addr;
-        case EM_AMODE_PTR2: return mach->cpu.regs.reg16[insn->reg2];
-        case EM_AMODE_PTR23: return insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3];
+        case EM_AMODE_PTR2: return mach->cpu.regs.reg16[insn->reg2] + insn->addr;
+        case EM_AMODE_PTR23:
+            return insn->addr + mach->cpu.regs.reg16[insn->reg2] + mach->cpu.regs.reg16[insn->reg3] + insn->addr;
     }
     abort();
 }
 
 static void write_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t amode, uint16_t value) {
-    em_segno_t seg = EM_SEGNO_DS;
+    em_segno_t seg = amode >= EM_AMODE_STR_SI ? EM_SEGNO_ES : EM_SEGNO_DS;
     if (insn->seg_pfx != EM_SEGNO_NONE) {
         seg = insn->seg_pfx;
     }
@@ -180,6 +186,9 @@ static void write_operand(em_machine_t *mach, em_insn_t const *insn, em_amode_t 
                 value
             );
             return;
+        case EM_AMODE_STR_SI: write_mem(mach, seg, mach->cpu.regs.si++, insn->op_wide, value); return;
+        case EM_AMODE_STR_DSDI: seg = EM_SEGNO_DS; __attribute__((fallthrough));
+        case EM_AMODE_STR_DI: write_mem(mach, seg, mach->cpu.regs.di++, insn->op_wide, value); return;
     }
     abort();
 }
@@ -212,20 +221,20 @@ static inline bool test_branch_cond(em_cpu_regs_t *regs, em_branch_t cond) {
         case EM_BRANCH_LESS_EQ: return (sf ^ of) | zf;
         case EM_BRANCH_CXZ: return regs->cx == 0;
         case EM_BRANCH_LOOP:
+            regs->cx--;
             if (regs->cx != 0) {
-                regs->cx--;
                 return true;
             }
             return false;
         case EM_BRANCH_LOOP_NE:
+            regs->cx--;
             if (regs->cx != 0 && !zf) {
-                regs->cx--;
                 return true;
             }
             return false;
         case EM_BRANCH_LOOP_EQ:
+            regs->cx--;
             if (regs->cx != 0 && zf) {
-                regs->cx--;
                 return true;
             }
             return false;
@@ -236,7 +245,9 @@ static inline bool test_branch_cond(em_cpu_regs_t *regs, em_branch_t cond) {
 
 // Step the CPU one instruction.
 void em_cpu_step(em_machine_t *mach) {
-    em_insn_t insn = em_cpu_fetch(mach);
+    em_insn_t insn     = em_cpu_fetch(mach);
+    uint16_t  old_ip   = mach->cpu.regs.ip;
+    mach->cpu.regs.ip += insn.length;
 
     // Fetch operands.
     uint16_t lhs     = 0;
@@ -267,8 +278,9 @@ void em_cpu_step(em_machine_t *mach) {
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
         case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
 
+        case EM_IOP_LEA: rhs = lea_operand(mach, &insn, insn.rhs); break;
+
         case EM_IOP_XCHG:
-        case EM_IOP_LEA:
         case EM_IOP_ADD:
         case EM_IOP_SUB:
         case EM_IOP_CMP:
@@ -329,13 +341,13 @@ void em_cpu_step(em_machine_t *mach) {
             flags &= ~EM_SAHF_LAHF;
             flags |= mach->cpu.regs.ah & EM_SAHF_LAHF;
             break;
+        case EM_IOP_LEA:
         case EM_IOP_MOV: res = rhs; break;
         case EM_IOP_PUSH: stack_push(mach, lhs); break;
         case EM_IOP_POP: res = stack_pop(mach); break;
         case EM_IOP_XCHG: break; // Handled by the writeback.
         case EM_IOP_IOREAD: fprintf(stderr, "TODO: EM_IOP_IOREAD\n"); abort();
         case EM_IOP_IOWRITE: fprintf(stderr, "TODO: EM_IOP_IOWRITE\n"); abort();
-        case EM_IOP_LEA: res = rhs; break;
 
         case EM_IOP_SUB:
         case EM_IOP_NEG:
@@ -504,4 +516,11 @@ void em_cpu_step(em_machine_t *mach) {
     }
     mach->cpu.regs.flags |= 0x0002;
     mach->cpu.regs.flags &= 0x0fd7;
+
+    if (insn.rep_pfx) {
+        mach->cpu.regs.cx--;
+        if (mach->cpu.regs.cx != 0 && (insn.rep_pfx_eq || !(mach->cpu.regs.flags & EM_FLAG_ZF))) {
+            mach->cpu.regs.ip = old_ip;
+        }
+    }
 }

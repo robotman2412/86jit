@@ -6,6 +6,7 @@
 
 #include "em_cpu.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 
@@ -93,6 +94,12 @@ typedef enum __attribute__((packed)) {
     EM_AMODE_PTR2,
     // Memory at `reg2 + areg3 + addr`.
     EM_AMODE_PTR23,
+    // Memory at `si`, then increment `si`.
+    EM_AMODE_STR_SI,
+    // Memory at `di`, then increment `di`.
+    EM_AMODE_STR_DI,
+    // Memory at `ds:di`, then increment `di`.
+    EM_AMODE_STR_DSDI,
 } em_amode_t;
 
 // Branch conditions.
@@ -130,6 +137,8 @@ typedef enum __attribute__((packed)) {
 
 // A single fetched instruction.
 typedef struct em_insn em_insn_t;
+// Instruction fetch buffer.
+typedef struct em_ibuf em_ibuf_t;
 
 // A single fetched instruction.
 struct em_insn {
@@ -153,6 +162,10 @@ struct em_insn {
     uint8_t lock_pfx   : 1;
     // Invert branch condition.
     uint8_t neg_branch : 1;
+    // Repeat prefix.
+    uint8_t rep_pfx    : 1;
+    // Repeat while equal (i.e. REP/REPE/REPZ instead of REPNE/REPNZ).
+    uint8_t rep_pfx_eq : 1;
 
     // Register indices.
     em_regno_t reg1, reg2, reg3;
@@ -169,6 +182,12 @@ struct em_insn {
     uint16_t imm;
     // Code segment selector.
     uint16_t cs;
+};
+
+// Instruction fetch buffer.
+struct em_ibuf {
+    uint8_t buffer[15];
+    uint8_t len;
 };
 
 // Get opcode from byte 0.
@@ -198,4 +217,4 @@ struct em_insn {
 
 // Decode one instruction.
 // The provided buffer should be at least 6 bytes large.
-em_insn_t em_insn_decode(uint16_t ip, uint8_t const *bytes);
+em_insn_t em_insn_decode(uint16_t ip, uint8_t const *buf, size_t buf_len);

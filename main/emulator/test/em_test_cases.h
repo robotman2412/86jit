@@ -12,7 +12,7 @@
 
 typedef struct {
     char const *text;
-    uint8_t     data[6];
+    uint8_t     data[10];
     em_insn_t   decd;
 } em_decode_test_t;
 

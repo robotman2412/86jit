@@ -64,16 +64,19 @@ def decd_insn(
         lhs: str|None = None,
         rhs: str|None = None,
         reg: list[str|None]|None = None,
-        addr: int|None = None,
-        imm: int|None = None,
-        cs: int|None = None,
-        op_carry: bool|None = None,
-        op_sign: bool|None = None,
-        op_wide: bool|None = None,
-        op_no_cf: bool|None = None,
+        addr: int = 0,
+        imm: int = 0,
+        cs: int = 0,
+        op_carry: bool = False,
+        op_sign: bool = False,
+        op_wide: bool = False,
+        op_no_cf: bool = False,
         seg_pfx: str = "NONE",
+        lock_pfx: bool = False,
+        rep_pfx: bool = False,
+        rep_pfx_eq: bool = False,
         branch: str|None = None,
-        neg_branch: bool|None = None,
+        neg_branch: bool = False,
     ) -> dict[str, str]:
     res = { "iop": "EM_IOP_" + iop.upper() }
     if lhs != None:
@@ -85,25 +88,20 @@ def decd_insn(
         for i in range(len(reg)):
             if reg[i] != None:
                 res[f"reg{i+1}"] = "EM_REGNO_" + reg[i].upper() # type: ignore
-    if addr != None:
-        res["addr"] = f"0x{addr:04x}"
-    if imm != None:
-        res["imm"] = f"0x{imm:04x}"
-    if cs != None:
-        res["cs"] = f"0x{cs:04x}"
-    if op_carry != None:
-        res["op_carry"] = "true" if op_carry else "false"
-    if op_sign != None:
-        res["op_sign"] = "true" if op_sign else "false"
-    if op_wide != None:
-        res["op_wide"] = "true" if op_wide else "false"
-    if op_no_cf != None:
-        res["op_no_cf"] = "true" if op_no_cf else "false"
+    res["addr"] = f"0x{addr:04x}"
+    res["imm"] = f"0x{imm:04x}"
+    res["cs"] = f"0x{cs:04x}"
+    res["op_carry"] = "true" if op_carry else "false"
+    res["op_sign"] = "true" if op_sign else "false"
+    res["op_wide"] = "true" if op_wide else "false"
+    res["op_no_cf"] = "true" if op_no_cf else "false"
     res["seg_pfx"] = "EM_SEGNO_" + seg_pfx.upper()
+    res["lock_pfx"] = "true" if lock_pfx else "false"
+    res["rep_pfx"] = "true" if rep_pfx else "false"
+    res["rep_pfx_eq"] = "true" if rep_pfx_eq else "false"
     if branch != None:
         res["branch"] = "EM_BRANCH_" + branch.upper()
-    if neg_branch != None:
-        res["neg_branch"] = "true" if neg_branch else "false"
+    res["neg_branch"] = "true" if neg_branch else "false"
     return res
 
 class DecodeTest:
@@ -120,6 +118,7 @@ decode_tests = [
     DT("mov  ax, 1234",       decd_insn("mov",  "reg1", "imm",  ["ax"],       imm=1234, op_wide=True)),
     DT("mov  al, [3000]",     decd_insn("mov",  "reg1", "addr", ["al"],       addr=3000)),
     DT("mov  ds, [0xabcd]",   decd_insn("mov",  "reg1", "addr", ["ds"],       addr = 0xabcd, op_wide=True)),
+    DT("lea  si, [0xabcd]",   decd_insn("lea",  "reg1", "addr", ["si"],       addr = 0xabcd, op_wide=True)),
     DT("xchg al, cl",         decd_insn("xchg", "reg1", "reg2", ["al", "cl"])),
     DT("push dx",             decd_insn("push", "reg1", None,   ["dx"],       op_wide=True)),
     DT("pop  ax",             decd_insn("pop",  "reg1", None,   ["ax"],       op_wide=True)),
@@ -156,11 +155,21 @@ decode_tests = [
     DT("retf",                decd_insn("lret",  "imm",  imm=0)),
     DT("retf 86",             decd_insn("lret",  "imm",  imm=86)),
 
-    # Segment override.
-    # DT("ds mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ds", addr=3)),
-    # DT("es mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="es", addr=3)),
-    # DT("ss mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="ss", addr=3)),
-    # DT("cs mov ax, [3]",      decd_insn("mov",  "reg1", "addr", ["ax"],       seg_pfx="cs", addr=3)),
+    # Prefix handling.
+    DT("ds    mov ax, [3]",   decd_insn("mov", "reg1", "addr", ["ax"], seg_pfx="ds", addr=3, op_wide=True)),
+    DT("es    mov ax, [3]",   decd_insn("mov", "reg1", "addr", ["ax"], seg_pfx="es", addr=3, op_wide=True)),
+    DT("ss    mov ax, [3]",   decd_insn("mov", "reg1", "addr", ["ax"], seg_pfx="ss", addr=3, op_wide=True)),
+    DT("cs    mov ax, [3]",   decd_insn("mov", "reg1", "addr", ["ax"], seg_pfx="cs", addr=3, op_wide=True)),
+    DT("lock  inc [3]",       decd_insn("add", "addr", "imm",          lock_pfx=True, addr=3, imm=1)),
+    DT("repe  nop",           decd_insn("nop",                         rep_pfx=True, rep_pfx_eq=True)),
+    DT("repne nop",           decd_insn("nop",                         rep_pfx=True, rep_pfx_eq=False)),
+
+    # String ops.
+    DT("stosb",               decd_insn("mov", "str_di", "reg1",   ["al"])),
+    DT("lodsb",               decd_insn("mov", "reg1",   "str_si", ["al"])),
+    DT("movsb",               decd_insn("mov", "str_dsdi", "str_si")),
+    DT("scasb",               decd_insn("cmp", "str_di", "reg1",   ["al"])),
+    DT("cmpsb",               decd_insn("cmp", "str_dsdi", "str_si")),
 
     # MOD R/M permutations.
     DT("and  ax, bx",         decd_insn("and",  "reg2", "reg1", ["bx", "ax"], op_wide=True)),
@@ -218,6 +227,17 @@ parity_tests = [
         mov  cl, 12
         mov  dh, 0xab
     """),
+    PT("basic mem", """
+        lea ax, [mylab+si]
+        mov bx, 0xcafe
+        mov cx, 0xbabe
+mylab:
+        mov [0x0400], bx
+        mov [0x0402], cx
+        mov dx, [0x0402]
+        mov cx, [0x0400]
+        lea si, [1234+di]
+    """),
     PT("basic arith", """
         mov  ax, 16
         mov  bx, 100
@@ -270,7 +290,7 @@ parity_tests = [
         sar  bx, cl
     """),
     PT("multi-bit shift", """
-        mov  ax, 0x09            ; AMD conflict (entire test).
+        mov  ax, 0x09               ; AMD conflict (entire test).
         mov  bx, -1
         mov  cl, 4
         ror  ax, cl
@@ -281,7 +301,7 @@ parity_tests = [
         sar  bx, cl
     """),
     PT("rotate with carry", """
-        mov  ax, 0x09            ; AMD conflict (entire test).
+        mov  ax, 0x09               ; AMD conflict (entire test).
         mov  cl, 9
         rcr  ax, 1
         rcl  ax, 1
@@ -311,7 +331,7 @@ parity_tests = [
         mov ah, 0xff
         sahf
         xor ah, ah
-        lahf            ; AMD conflict.
+        lahf                        ; AMD conflict.
     """),
     PT("branch", """
         nop             ; To make the first offset not relative to 0.
@@ -413,6 +433,41 @@ func_2:
         retf
 
 end:
+    """),
+    PT("memcpy", """
+        mov cx, 4
+        mov di, 0x400
+        lea si, data
+cpy_1:
+        cs lodsb                    ; Copying from CS to ES.
+        es stosb
+        loop cpy_1
+        
+        mov cx, 4
+        mov di, 0x800
+        mov si, 0x400
+        rep movsb                   ; Copying from ES to DS.
+        
+        mov cx, 4
+        mov di, 0x400
+        mov si, 0xc00
+        ds rep movsb                ; Copying from DS to DS.
+        
+        mov cx, 4
+        mov di, 0xf000
+        lea si, data
+        cs rep movsb                ; Copying from CS to DS.
+        
+        jmp end
+        
+data:
+        db 0xde, 0xad, 0xbe, 0xef
+        db 0xcc                     ; This part should not be copied.
+        
+end:
+    """),
+    PT("strcpy", """
+        
     """),
 ]
 
